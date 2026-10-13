@@ -300,7 +300,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
         try {
           console.log("[TELEGRAM_WEBHOOK] Using Groq Vision (Unified with web)...");
           response = await groq.chat.completions.create({
-            model: "llama-3.2-11b-vision-preview",
+            model: "meta-llama/llama-4-scout-17b-16e-instruct",
             messages: [
               {
                 role: "user",
@@ -324,7 +324,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
           // Fallback to Gemini if Groq fails
           try {
             const geminiResponse = await ai.models.generateContent({
-              model: "gemini-3.8-flash",
+              model: "gemini-flash-latest",
               contents: {
                 parts: [
                   { text: extractionPrompt },
@@ -375,7 +375,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
           // Transcription via Gemini (robust & fast)
           console.log("[TELEGRAM_WEBHOOK] Using Gemini for Audio transcription...");
           const transcriptionResponse = await ai.models.generateContent({
-            model: "gemini-3.5-transcribe",
+            model: "gemini-flash-latest",
             contents: {
               parts: [
                 {
@@ -399,7 +399,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
           // Re-use the same analysis logic (Groq)
           console.log("[TELEGRAM_WEBHOOK] Analyzing transcript with Groq...");
           const analysisResponse = await groq.chat.completions.create({
-            model: "llama-3.1-70b-versatile",
+            model: "llama-3.3-70b-versatile",
             messages: [
               { role: "system", content: extractionPrompt },
               { role: "user", content: `Transcription vocale à analyser : ${transcriptText}` }
@@ -430,7 +430,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
         if (!(text.length >= 6 && text.length <= 12 && /^[A-Z0-9]+$/.test(text))) {
           console.log("[TELEGRAM_WEBHOOK] Using Groq for Text extraction (Unified)...");
           const response = await groq.chat.completions.create({
-            model: "llama-3.1-70b-versatile",
+            model: "llama-3.3-70b-versatile",
             messages: [
               { role: "system", content: extractionPrompt },
               { role: "user", content: `Texte à analyser : ${text}` }

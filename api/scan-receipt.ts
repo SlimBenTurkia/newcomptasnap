@@ -84,7 +84,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
     // Strategy 1: Groq Vision (Ultra fast)
     if (groqApiKey) {
       const groq = new Groq({ apiKey: groqApiKey });
-      const visionModels = ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"];
+      const visionModels = ["meta-llama/llama-4-scout-17b-16e-instruct"];
       
       for (const modelName of visionModels) {
         try {
@@ -120,35 +120,34 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
       }
     }
 
-    // Strategy 2: Gemini Fallback (Very reliable)
+    // Strategy 2: Gemini Fallback
+    const geminiErrors: string[] = [];
     if (!extractedData && geminiApiKey) {
-      try {
-        console.log(`[OCR] Tentative avec Gemini fallback...`);
-        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-
-        const result = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
-          contents: {
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  data: cleanBase64,
-                  mimeType: mimeType
-                }
-              }
-            ]
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const geminiModels = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-3.5-flash"];
+      for (const modelName of geminiModels) {
+        try {
+          console.log(`[OCR] Tentative avec Gemini: ${modelName}`);
+          const result = await ai.models.generateContent({
+            model: modelName,
+            contents: {
+              parts: [
+                { text: prompt },
+                { inlineData: { data: cleanBase64, mimeType: mimeType } }
+              ]
+            }
+          });
+          const responseText = result.text || "{}";
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            extractedData = JSON.parse(jsonMatch[0]);
+            usedModel = `Gemini:${modelName}`;
+            break;
           }
-        });
-
-        const responseText = result.text || "{}";
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          extractedData = JSON.parse(jsonMatch[0]);
-          usedModel = "Gemini:1.5-flash";
+        } catch (err: any) {
+          console.error(`[OCR] Échec Gemini ${modelName}:`, err?.message);
+          geminiErrors.push(`${modelName}: ${String(err?.message || err).slice(0, 150)}`);
         }
-      } catch (err: any) {
-        console.error(`[OCR] Échec Gemini fallback:`, err?.message);
       }
     }
 
@@ -156,6 +155,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
       return res.status(500).json({
         success: false,
         error: "Échec de l'analyse OCR avec tous les moteurs disponibles. L'image est peut-être trop lourde ou illisible.",
+        details: geminiErrors,
       });
     }
 
