@@ -10,6 +10,12 @@ export const config = {
   maxDuration: 60,
 };
 
+const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label}: délai dépassé (${ms / 1000}s)`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+
 export default async function handler(req: any, res: any) {
   // CORS Headers for Vercel deployment
   res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -78,18 +84,20 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
 16. "rawOcrText": Extrait court (max 300 car) du texte brut.
 17. "confidence": Score de confiance entre 0 et 100.`;
 
+    const startedAt = Date.now();
+    const geminiErrors: string[] = [];
     let extractedData: any = null;
     let usedModel = "";
 
     // Strategy 1: Groq Vision (Ultra fast)
     if (groqApiKey) {
-      const groq = new Groq({ apiKey: groqApiKey });
+      const groq = new Groq({ apiKey: groqApiKey, timeout: 20000, maxRetries: 0 });
       const visionModels = ["meta-llama/llama-4-scout-17b-16e-instruct"];
       
       for (const modelName of visionModels) {
         try {
           console.log(`[OCR] Tentative avec Groq Vision: ${modelName}`);
-          const response = await groq.chat.completions.create({
+          const response = await withTimeout(groq.chat.completions.create({
             model: modelName,
             messages: [
               {
@@ -108,7 +116,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
             response_format: { type: "json_object" },
             temperature: 0.1,
             max_tokens: 1000
-          });
+          }), 22000, "Groq");
 
           const textOutput = response.choices[0]?.message?.content || "{}";
           extractedData = JSON.parse(textOutput);
@@ -116,19 +124,20 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
           break;
         } catch (err: any) {
           console.warn(`[OCR] Échec Groq ${modelName}:`, err?.message);
+          geminiErrors.push(`Groq ${modelName}: ${String(err?.message || err).slice(0, 150)}`);
         }
       }
     }
 
     // Strategy 2: Gemini Fallback
-    const geminiErrors: string[] = [];
     if (!extractedData && geminiApiKey) {
-      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey, httpOptions: { timeout: 20000 } });
       const geminiModels = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-3.5-flash"];
       for (const modelName of geminiModels) {
+        if (Date.now() - startedAt > 30000) break; // reste sous maxDuration (60s)
         try {
           console.log(`[OCR] Tentative avec Gemini: ${modelName}`);
-          const result = await ai.models.generateContent({
+          const result = await withTimeout(ai.models.generateContent({
             model: modelName,
             contents: {
               parts: [
@@ -136,7 +145,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
                 { inlineData: { data: cleanBase64, mimeType: mimeType } }
               ]
             }
-          });
+          }), 22000, "Gemini");
           const responseText = result.text || "{}";
           const jsonMatch = responseText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
