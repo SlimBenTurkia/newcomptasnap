@@ -1,0 +1,11 @@
+{
+  "name": "ComptaSnap",
+  "description": "Chaque dépense laisse une trace. Scannez vos reçus, suivez vos factures, gardez tout classé et prêt pour votre comptable.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

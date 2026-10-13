@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidUserProfile(data) {
+      return data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 256
+        && (data.estimatedTaxRate is number || data.estimatedTaxRate is int)
+        && data.estimatedTaxRate >= 0 && data.estimatedTaxRate <= 100
+        && (!('nextInvoiceNumber' in data) || data.nextInvoiceNumber is number || data.nextInvoiceNumber is int)
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100))
+        && (!('telegramId' in data) || (data.telegramId is string && data.telegramId.size() <= 100))
+        && (!('telegramToken' in data) || (data.telegramToken is string && data.telegramToken.size() <= 100))
+        && data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isValidReceipt(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.supplier is string && data.supplier.size() <= 200
+        && data.date is string && data.date.size() <= 30
+        && (data.totalTTC is number || data.totalTTC is int)
+        && data.status is string && (data.status == 'validé' || data.status == 'en_attente')
+        && data.transactionType is string && (data.transactionType == 'income' || data.transactionType == 'expense')
+        && data.userId == request.auth.uid;
+    }
+
+    function isValidInvoice(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.invoiceNumber is string && data.invoiceNumber.size() <= 50
+        && data.clientName is string && data.clientName.size() <= 200
+        && data.date is string && data.date.size() <= 30
+        && (data.totalTTC is number || data.totalTTC is int)
+        && data.status is string && (data.status == 'payé' || data.status == 'en_attente' || data.status == 'annulé');
+    }
+
+    // User profile settings
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow create, update: if isSignedIn() && request.auth.uid == userId
+        && isValidUserProfile(incoming());
+      
+      // Receipts collection scoped to each authenticated user
+      match /receipts/{receiptId} {
+        allow get, list, delete: if isSignedIn() && request.auth.uid == userId;
+        allow create, update: if isSignedIn() && request.auth.uid == userId
+          && isValidId(receiptId)
+          && isValidReceipt(incoming());
+      }
+
+      // Invoices collection scoped to each authenticated user
+      match /invoices/{invoiceId} {
+        allow get, list, delete: if isSignedIn() && request.auth.uid == userId;
+        allow create, update: if isSignedIn() && request.auth.uid == userId
+          && isValidId(invoiceId)
+          && isValidInvoice(incoming());
+      }
+    }
+  }
+}
