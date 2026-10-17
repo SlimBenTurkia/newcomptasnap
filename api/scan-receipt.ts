@@ -132,7 +132,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
     // Strategy 2: Gemini Fallback
     if (!extractedData && geminiApiKey) {
       const ai = new GoogleGenAI({ apiKey: geminiApiKey, httpOptions: { timeout: 20000 } });
-      const geminiModels = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-3.5-flash"];
+      const geminiModels = ["gemini-flash-latest", "gemini-3.5-flash"];
       for (const modelName of geminiModels) {
         if (Date.now() - startedAt > 30000) break; // reste sous maxDuration (60s)
         try {
