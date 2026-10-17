@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { ReceiptItem, ReceiptCategory } from "../types";
 import { ReceiptCard } from "./ReceiptCard";
 import { formatEuro } from "../utils/formatters";
-import { Search, Filter, Plus, FileX, ArrowUpDown, FileSpreadsheet, Mic, Camera, UploadCloud } from "lucide-react";
+import { Plus, FileSpreadsheet, Mic, Camera, UploadCloud } from "lucide-react";
 
 interface ReceiptListProps {
   receipts: ReceiptItem[];
@@ -113,90 +113,90 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
         </label>
       </section>
 
-      {/* Main List Section */}
-      <div className="space-y-6">
-        {/* Search & Filter Bar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="relative w-full md:w-96 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-dim group-focus-within:text-brand-vibrant transition-colors" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher une dépense..."
-              className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-brand-glass border border-brand-snow/10 text-brand-snow placeholder-brand-snow/20 focus:outline-none focus:border-brand-vibrant/50 focus:ring-4 focus:ring-brand-vibrant/5 transition-all text-sm font-medium"
-            />
-          </div>
+      {/* Liste — même design « ticket » que les factures */}
+      <div>
+        {/* Recherche */}
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Rechercher un reçu..."
+          aria-label="Rechercher un reçu"
+          className="w-full h-12 mb-4 bg-transparent border-0 border-b-2 border-brand-snow/40 rounded-none text-brand-snow placeholder:text-brand-muted font-mono text-base focus:outline-none focus:border-brand-vibrant"
+        />
 
-          <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-brand-glass border border-brand-snow/10 w-full md:w-auto">
-            {(["all", "validé", "en_attente"] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => onStatusFilterChange(status)}
-                className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap cursor-pointer ${
-                  statusFilter === status
-                    ? status === "en_attente" 
-                      ? "bg-amber-500 text-brand-deep shadow-lg shadow-amber-500/20"
-                      : "bg-brand-vibrant text-brand-deep shadow-lg shadow-brand-vibrant/20"
-                    : "text-brand-muted hover:text-brand-snow hover:bg-brand-snow/5"
-                }`}
-              >
-                {status === "all" ? "Tous" : status === "validé" ? "Validés" : "À Valider"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Categories Bar */}
-        <div className="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar">
-          <button
-            onClick={() => setSelectedCategory("all")}
-            className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer ${
-              selectedCategory === "all"
-                ? "bg-brand-teal/20 text-brand-teal border-brand-teal/40"
-                : "bg-brand-snow/5 text-brand-muted border-brand-snow/10 hover:border-brand-teal/30 hover:text-brand-teal"
-            }`}
-          >
-            Tous les types
-          </button>
-          {categories.map((cat) => (
+        {/* Statut : onglets identiques à ceux des factures */}
+        <div className="k flex gap-5 pb-4" role="tablist" aria-label="Filtrer les reçus">
+          {([
+            { id: "all", label: "Tous" },
+            { id: "en_attente", label: "À valider" },
+            { id: "validé", label: "Validés" },
+          ] as const).map((t) => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border whitespace-nowrap cursor-pointer ${
-                selectedCategory === cat
-                  ? "bg-brand-teal/20 text-brand-teal border-brand-teal/40"
-                  : "bg-brand-snow/5 text-brand-snow/40 border-brand-snow/10 hover:border-brand-teal/30 hover:text-brand-teal"
+              key={t.id}
+              role="tab"
+              aria-selected={statusFilter === t.id}
+              onClick={() => onStatusFilterChange(t.id)}
+              className={`pb-1 border-b-2 min-h-8 cursor-pointer ${
+                statusFilter === t.id ? "text-brand-vibrant border-brand-vibrant" : "text-brand-muted border-transparent"
               }`}
             >
-              {cat}
+              {t.label}
             </button>
           ))}
         </div>
 
-        {/* Receipts Content */}
-        {filteredReceipts.length === 0 ? (
-          <div className="bg-brand-snow/[0.02] border border-dashed border-brand-snow/10 rounded-[3rem] p-16 text-center">
-            <div className="w-24 h-24 rounded-full bg-brand-snow/5 flex items-center justify-center mx-auto mb-8 text-brand-snow/10">
-              <FileSpreadsheet className="w-10 h-10" />
-            </div>
-            <h4 className="text-xl font-black text-brand-snow mb-3 tracking-tight">Aucune dépense trouvée</h4>
-            <p className="text-sm text-brand-muted max-w-xs mx-auto mb-10 leading-relaxed font-medium">
-              Ajustez vos filtres ou commencez à capturer vos nouveaux justificatifs dès maintenant.
-            </p>
+        {/* Catégories : mêmes onglets, défilables */}
+        <div className="k flex gap-5 pb-4 overflow-x-auto no-scrollbar" role="tablist" aria-label="Filtrer par catégorie">
+          {["all", ...categories].map((cat) => (
             <button
-              onClick={onOpenScan}
-              className="px-10 py-4 rounded-2xl bg-brand-vibrant text-brand-deep font-black text-[11px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-brand-vibrant/20 cursor-pointer"
+              key={cat}
+              role="tab"
+              aria-selected={selectedCategory === cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`pb-1 border-b-2 min-h-8 whitespace-nowrap cursor-pointer ${
+                selectedCategory === cat ? "text-brand-vibrant border-brand-vibrant" : "text-brand-muted border-transparent"
+              }`}
             >
-              Scanner un premier reçu
+              {cat === "all" ? "Tous les types" : cat}
             </button>
+          ))}
+        </div>
+
+        {filteredReceipts.length > 0 && (
+          <div className="k text-brand-muted pb-3">
+            {filteredReceipts.length} reçu{filteredReceipts.length > 1 ? "s" : ""} · {formatEuro(filteredTotal)}
+          </div>
+        )}
+
+        {filteredReceipts.length === 0 ? (
+          <div className="border border-dashed border-brand-snow/20 px-6 py-14 text-center">
+            <FileSpreadsheet className="w-8 h-8 mx-auto mb-4 text-brand-muted" aria-hidden="true" />
+            <h3 className="text-lg font-extrabold">
+              {totalAllMonthsCount === 0 ? "Aucun reçu enregistré" : "Aucun reçu dans ce filtre"}
+            </h3>
+            <p className="text-sm text-brand-muted mt-2 max-w-xs mx-auto">
+              {totalAllMonthsCount === 0
+                ? "Scannez votre premier justificatif : il apparaîtra ici avec son statut."
+                : "Changez de filtre ou de période pour voir les autres reçus."}
+            </p>
+            {totalAllMonthsCount > 0 && onShowAllMonths ? (
+              <button onClick={onShowAllMonths} className="k mt-6 underline cursor-pointer text-brand-vibrant">
+                Voir tous les mois
+              </button>
+            ) : (
+              <button onClick={onOpenScan} className="k mt-6 underline cursor-pointer text-brand-vibrant">
+                Scanner un reçu
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {filteredReceipts.map((receipt) => (
+          <div className="ticket !pb-2">
+            {filteredReceipts.map((receipt, i) => (
               <ReceiptCard
                 key={receipt.id}
                 receipt={receipt}
+                isLast={i === filteredReceipts.length - 1}
                 onClick={() => onSelectReceipt(receipt)}
                 onToggleStatus={(e) => {
                   e.stopPropagation();

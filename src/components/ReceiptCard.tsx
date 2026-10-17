@@ -1,14 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { ReceiptItem, ReceiptCategory } from "../types";
-import {
-  formatEuro,
-  formatDateFrench,
-  formatReceiptAmountDisplay,
-} from "../utils/formatters";
-import { getCategoryMetadata, getTaxDeductibilityBadge } from "../utils/expenseCategories";
+import { formatEuro } from "../utils/formatters";
+import { getTaxDeductibilityBadge } from "../utils/expenseCategories";
 import {
   CheckCircle2,
-  Clock,
   Laptop,
   Train,
   Utensils,
@@ -16,19 +11,12 @@ import {
   Phone,
   FileBox,
   HelpCircle,
-  Sparkles,
   Trash2,
-  Check,
-  X,
-  Globe,
   Hotel,
   Briefcase,
   Megaphone,
   CreditCard,
   GraduationCap,
-  Mail,
-  FileX,
-  AlertCircle,
 } from "lucide-react";
 
 interface ReceiptCardProps {
@@ -36,6 +24,8 @@ interface ReceiptCardProps {
   onClick: () => void;
   onToggleStatus: (e: React.MouseEvent) => void;
   onDelete?: (e: React.MouseEvent) => void;
+  /** Dernière ligne de la liste : pas de séparateur en pointillés */
+  isLast?: boolean;
 }
 
 export const getCategoryIcon = (category: ReceiptCategory) => {
@@ -68,183 +58,97 @@ export const getCategoryIcon = (category: ReceiptCategory) => {
   }
 };
 
+const shortDate = (iso: string) => {
+  if (!iso) return "—";
+  const d = new Date(iso + "T12:00:00");
+  if (isNaN(d.getTime())) return iso;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "short",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+};
+
+/**
+ * Ligne de reçu au même format « ticket de caisse » que la liste des factures
+ * (libellé mono, tampon de statut, ligne à points de conduite, gros montant).
+ * À placer dans un conteneur <div className="ticket">.
+ */
 export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   receipt,
   onClick,
   onToggleStatus,
   onDelete,
+  isLast = false,
 }) => {
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const isValidated = receipt.status === "validé";
-  const isEmailSource = receipt.source === "email";
   const hasJustificatif = !!(receipt.fileDataUrl || receipt.driveFileId);
-  const catMeta = getCategoryMetadata(receipt.category);
   const deductBadge = receipt.taxDeductibility ? getTaxDeductibilityBadge(receipt.taxDeductibility) : null;
-
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsConfirmingDelete(true);
-  };
-
-  const handleConfirmDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onDelete) {
-      onDelete(e);
-    }
-  };
-
-  const handleCancelDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsConfirmingDelete(false);
-  };
+  const label = receipt.expenseType || receipt.category;
 
   return (
     <div
       onClick={onClick}
-      className={`group relative flex items-center justify-between gap-3 p-4 sm:p-5 transition-colors cursor-pointer bg-brand-glass border border-brand-snow/10 border-l-4 hover:border-brand-snow/30 ${
-        isValidated ? "border-l-brand-vibrant" : "border-l-amber-400"
-      }`}
+      className={`py-3.5 cursor-pointer ${!isLast ? "border-b-2 border-dashed border-[var(--ink)]/35" : ""}`}
     >
-      {/* Left: Thumbnail & Supplier Info */}
-      <div className="flex items-center gap-4 min-w-0">
-        {/* Document Thumbnail / Icon */}
-        <div className={`relative w-14 h-14 rounded-2xl bg-brand-deep/60 border flex items-center justify-center shrink-0 transition-all duration-300 overflow-hidden shadow-inner ${
-          isValidated ? "border-brand-vibrant/20 group-hover:border-brand-vibrant/50" : "border-amber-500/20 group-hover:border-amber-500/50"
-        }`}>
-          {receipt.fileDataUrl ? (
-            <img
-              src={receipt.fileDataUrl}
-              alt={receipt.supplier}
-              className="w-full h-full object-cover rounded-2xl group-hover:scale-110 transition-transform duration-500 opacity-80 group-hover:opacity-100"
-            />
-          ) : (
-            <div className="opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-300">
-              {getCategoryIcon(receipt.category)}
-            </div>
-          )}
-          {receipt.aiExtracted && (
-            <div
-              title="Classifié et extrait par IA"
-              className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-vibrant border border-brand-deep text-brand-deep flex items-center justify-center shadow-lg"
-            >
-              <Sparkles className="w-3 h-3" />
-            </div>
-          )}
-        </div>
-
-        {/* Text Info */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h4 className="font-black text-brand-snow text-base sm:text-lg truncate group-hover:text-brand-vibrant transition-colors tracking-tight">
-              {receipt.supplier}
-            </h4>
-
-            {!hasJustificatif && (
-              <span 
-                title="Justificatif manquant"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-rose-500/10 text-rose-400 border border-rose-500/20"
-              >
-                <FileX className="w-3 h-3" />
-                <span>Manquant</span>
-              </span>
-            )}
-
-            {isEmailSource && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-brand-teal/10 text-brand-teal border border-brand-teal/20">
-                <Mail className="w-3 h-3" />
-                <span>Email</span>
-              </span>
-            )}
-          </div>
-
-          {/* Subline: Granular Expense Type + Date + Deductibility */}
-          <div className="flex items-center gap-2 text-[11px] text-brand-muted font-bold uppercase tracking-wider flex-wrap">
-            <span className="text-brand-teal/80">
-              {receipt.expenseType || receipt.category}
-            </span>
-
-            <span className="opacity-30">•</span>
-            <span>{formatDateFrench(receipt.date)}</span>
-
-            {deductBadge && (
-              <>
-                <span className="hidden md:inline opacity-30">•</span>
-                <span
-                  title={deductBadge.description}
-                  className="hidden md:inline-block text-brand-vibrant/60"
-                >
-                  {deductBadge.label}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          className="k font-bold text-left cursor-pointer truncate min-w-0"
+          style={{ color: "var(--ink)" }}
+        >
+          {label}
+        </button>
+        {isValidated ? <span className="stamp ok">Validé</span> : <span className="k">à valider</span>}
       </div>
 
-      {/* Right: Amount, Status Badge & Quick Actions */}
-      <div className="flex items-center gap-3 sm:gap-5 shrink-0">
-        <div className="text-right">
-          <div className="font-black text-brand-snow text-lg sm:text-xl tracking-tighter">
-            {formatEuro(receipt.totalTTC)}
-          </div>
-          <div className="font-bold text-[10px] text-brand-muted uppercase tracking-widest">
-            TVA {receipt.vatRate}%
-          </div>
+      <div className="leader">
+        <span className="truncate">{receipt.supplier}</span>
+        <i />
+        <span>{shortDate(receipt.date)}</span>
+      </div>
+
+      <div className="k flex flex-wrap items-center gap-x-3">
+        <span>TVA {receipt.vatRate}%</span>
+        {deductBadge && <span>{deductBadge.label}</span>}
+        {!hasJustificatif && <span style={{ color: "#C73A10" }}>justificatif manquant</span>}
+      </div>
+
+      <div className="flex items-end justify-between mt-1">
+        <div className="text-[34px] font-extrabold tracking-[-0.03em] leading-none">
+          {formatEuro(receipt.totalTTC)}
         </div>
-
-        {/* Status Badge (clickable to toggle) */}
-        <button
-          onClick={onToggleStatus}
-          title={isValidated ? "Marquer en attente" : "Valider le reçu"}
-          className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all cursor-pointer border ${
-            isValidated
-              ? "bg-brand-vibrant/10 text-brand-vibrant border-brand-vibrant/30 hover:bg-brand-vibrant/20 shadow-[0_0_15px_rgba(2,223,130,0.1)]"
-              : "bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]"
-          }`}
-        >
-          {isValidated ? (
-            <CheckCircle2 className="w-6 h-6" />
-          ) : (
-            <Clock className="w-6 h-6 animate-pulse" />
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={onToggleStatus}
+            className="p-2.5 cursor-pointer text-[var(--paper-muted)] hover:text-[#1E7A4F]"
+            title={isValidated ? "Marquer en attente" : "Valider le reçu"}
+            aria-label={isValidated ? "Marquer le reçu en attente" : "Valider le reçu"}
+          >
+            <CheckCircle2 className="w-5 h-5" />
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Supprimer le reçu ${receipt.supplier} ?`)) onDelete(e);
+              }}
+              className="p-2.5 cursor-pointer text-[var(--paper-muted)] hover:text-[#C73A10]"
+              title="Supprimer"
+              aria-label={`Supprimer le reçu ${receipt.supplier}`}
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
           )}
-        </button>
-
-        {/* Inline Quick Delete Button or Confirmation */}
-        {onDelete && (
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
-            {!isConfirmingDelete ? (
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                className="flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-glass text-brand-dim hover:text-rose-400 hover:bg-rose-500/10 border border-brand-snow/10 hover:border-rose-500/20 transition-all cursor-pointer opacity-60 group-hover:opacity-100"
-                title="Supprimer ce reçu"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            ) : (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleConfirmDelete}
-                  className="w-10 h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-600/20 active:scale-90 transition-all cursor-pointer"
-                  title="Confirmer la suppression"
-                >
-                  <Check className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelDelete}
-                  className="w-10 h-10 rounded-xl bg-brand-snow/10 text-brand-snow flex items-center justify-center hover:bg-brand-snow/20 transition-all cursor-pointer"
-                  title="Annuler"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 };
-
