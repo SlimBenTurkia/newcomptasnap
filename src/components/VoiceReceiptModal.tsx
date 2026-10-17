@@ -104,12 +104,14 @@ export const VoiceReceiptModal: React.FC<VoiceReceiptModalProps> = ({
 
       if (!response.ok) {
         console.error("Voice API error response:", response.status, textResponse);
+        let serverMessage = `Erreur serveur (${response.status})`;
         try {
           const errorData = JSON.parse(textResponse);
-          throw new Error(errorData.error || `Erreur serveur: ${response.status}`);
-        } catch (e) {
-          throw new Error(`Erreur serveur (${response.status})`);
+          if (errorData?.error) serverMessage = errorData.error;
+        } catch {
+          // réponse non JSON : on garde le message par défaut
         }
+        throw new Error(serverMessage);
       }
 
       const result = JSON.parse(textResponse);
