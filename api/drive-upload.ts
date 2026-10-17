@@ -57,6 +57,8 @@ export default async function handler(req: any, res: any) {
     });
   } catch (err: any) {
     console.error("Vercel Drive Upload Error:", err);
-    res.status(500).json({ success: false, error: err.message });
+    const code = Number(err?.code || err?.response?.status);
+    const status = code === 401 || code === 403 ? code : 500;
+    res.status(status).json({ success: false, error: err.message, code: status === 500 ? undefined : "drive_auth" });
   }
 }
