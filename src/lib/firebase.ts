@@ -133,19 +133,40 @@ export function initAuth(onUserReady: (user: User | null) => void): () => void {
  */
 export async function signInWithGoogle(): Promise<User> {
   const provider = new GoogleAuthProvider();
-  // Request Drive scopes as requested by user
+  // drive.file : accès uniquement aux fichiers créés par l'app (scope non sensible, suffisant ici).
+  // Le scope "drive.metadata" (restreint) a été retiré : inutile et source d'erreurs de scopes.
   provider.addScope("https://www.googleapis.com/auth/drive.file");
-  provider.addScope("https://www.googleapis.com/auth/drive.metadata");
   provider.setCustomParameters({ prompt: "select_account" });
-  
+
   const result = await signInWithPopup(auth, provider);
-  
-  // Store access token for Google Drive operations
+
+  // Reset any previous Drive state, then store the new token if it really has the Drive scope
+  clearGoogleDriveSession();
   const credential = GoogleAuthProvider.credentialFromResult(result);
   if (credential?.accessToken) {
-    sessionStorage.setItem("google_drive_access_token", credential.accessToken);
+    let hasDriveScope = true;
+    try {
+      const info = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(credential.accessToken)}`
+      );
+      if (info.ok) {
+        const data = await info.json();
+        hasDriveScope = String(data.scope || "").includes("auth/drive");
+      }
+    } catch {
+      // Vérification impossible (réseau) : on garde le jeton, le serveur tranchera
+    }
+
+    if (hasDriveScope) {
+      sessionStorage.setItem("google_drive_access_token", credential.accessToken);
+      sessionStorage.setItem("google_drive_token_time", String(Date.now()));
+    } else {
+      console.warn(
+        "Accès Google Drive non accordé : lors de la connexion Google, cochez la case Drive. Les justificatifs iront sur Firebase Storage."
+      );
+    }
   }
-  
+
   return result.user;
 }
 
@@ -207,13 +228,28 @@ export function authErrorMessage(err: any): string {
  * Get stored Google Drive access token
  */
 export function getGoogleDriveToken(): string | null {
-  return sessionStorage.getItem("google_drive_access_token");
+  const token = sessionStorage.getItem("google_drive_access_token");
+  if (!token) return null;
+  // Les jetons d'accès Google expirent après 1 h : on ignore un jeton trop ancien
+  const issuedAt = Number(sessionStorage.getItem("google_drive_token_time") || 0);
+  if (!issuedAt || Date.now() - issuedAt > 55 * 60 * 1000) {
+    clearGoogleDriveSession();
+    return null;
+  }
+  return token;
+}
+
+export function clearGoogleDriveSession(): void {
+  sessionStorage.removeItem("google_drive_access_token");
+  sessionStorage.removeItem("google_drive_token_time");
+  sessionStorage.removeItem("google_drive_folder_id");
 }
 
 /**
  * Sign out current user
  */
 export async function signOutUser(): Promise<void> {
+  clearGoogleDriveSession();
   await signOut(auth);
 }
 
@@ -258,6 +294,7 @@ export async function uploadReceiptToGoogleDrive(
     
     if (!initRes.ok) {
       console.error("Drive Init error response:", initRes.status);
+      if (initRes.status === 401 || initRes.status === 403) clearGoogleDriveSession();
       throw new Error(`Erreur initialisation Drive (${initRes.status})`);
     }
 
@@ -289,6 +326,7 @@ export async function uploadReceiptToGoogleDrive(
 
   if (!uploadRes.ok) {
     console.error("Drive Upload error response:", uploadRes.status);
+    if (uploadRes.status === 401 || uploadRes.status === 403) clearGoogleDriveSession();
     throw new Error(`Erreur upload Drive (${uploadRes.status})`);
   }
 
