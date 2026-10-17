@@ -62,6 +62,15 @@ export const storage: FirebaseStorage = getStorage(
   app,
   `gs://${firebaseConfigJson.storageBucket}`
 );
+// Par défaut Firebase Storage réessaie jusqu'à 10 minutes : on plafonne pour ne jamais bloquer l'app
+storage.maxUploadRetryTime = 15000;
+storage.maxOperationRetryTime = 15000;
+
+const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label}: délai dépassé (${ms / 1000}s)`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
 
 // Standardized Firestore Error Reporting as mandated by Skill guidelines
 export enum OperationType {
@@ -356,7 +365,11 @@ export async function uploadReceiptToStorage(
   if (token) {
     try {
       const mimeType = typeof fileOrDataUrl !== "string" ? fileOrDataUrl.type : "image/jpeg";
-      const driveData = await uploadReceiptToGoogleDrive(fileOrDataUrl, fileName, mimeType);
+      const driveData = await withTimeout(
+        uploadReceiptToGoogleDrive(fileOrDataUrl, fileName, mimeType),
+        30000,
+        "Google Drive"
+      );
       return { 
         url: driveData.viewLink, 
         storagePath: `drive:${driveData.fileId}`,
@@ -375,7 +388,7 @@ export async function uploadReceiptToStorage(
   try {
     if (typeof fileOrDataUrl === "string") {
       if (fileOrDataUrl.startsWith("data:")) {
-        await uploadString(storageRef, fileOrDataUrl, "data_url");
+        await withTimeout(uploadString(storageRef, fileOrDataUrl, "data_url"), 20000, "Firebase Storage");
       } else {
         return { url: fileOrDataUrl, storagePath: "" };
       }
@@ -383,7 +396,7 @@ export async function uploadReceiptToStorage(
       await uploadBytes(storageRef, fileOrDataUrl);
     }
 
-    const downloadUrl = await getDownloadURL(storageRef);
+    const downloadUrl = await withTimeout(getDownloadURL(storageRef), 10000, "Firebase Storage");
     return { url: downloadUrl, storagePath };
   } catch (err) {
     console.warn("Échec upload Firebase Storage, conservation de l'image locale:", err);
