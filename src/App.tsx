@@ -462,7 +462,14 @@ export default function App() {
         }
       } catch (err) {
         console.error("Erreur lors de la synchronisation Firebase:", err);
-        addToast("Erreur de sauvegarde Cloud. Le reçu reste disponible localement.", "error");
+        let detail = "";
+        try {
+          const m = (err as Error)?.message || "";
+          detail = (JSON.parse(m).error as string) || m;
+        } catch {
+          detail = (err as Error)?.message || "";
+        }
+        addToast(`Erreur de sauvegarde Cloud : ${detail.slice(0, 160)}`, "error");
       }
     }
   };
