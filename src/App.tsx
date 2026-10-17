@@ -416,60 +416,70 @@ export default function App() {
       );
     }
 
-    // 2. Firebase Storage & Firestore Persistence
-    if (currentUser) {
-      try {
-        let finalReceipt = { ...newReceipt };
+    // 2. Persistance : d'abord les DONNÉES dans Firestore (rapide, fiable),
+    //    puis le justificatif (Drive / Storage) en arrière-plan, sans jamais bloquer l'enregistrement.
+    if (!currentUser) return;
 
-        // Upload file / photo to Firebase Storage if data URL is present
-        if (newReceipt.fileDataUrl && newReceipt.fileDataUrl.startsWith("data:")) {
-          const { url, driveFileId, driveViewLink } = await uploadReceiptToStorage(
-            newReceipt.fileDataUrl,
-            newReceipt.fileName,
-            currentUser.uid,
-            newReceipt.id
-          );
-          if (url) {
-            finalReceipt = {
-              ...finalReceipt,
-              fileDataUrl: url,
-              driveFileId: driveFileId || finalReceipt.driveFileId,
-              driveViewLink: driveViewLink || finalReceipt.driveViewLink,
-            };
+    let permanentId = newReceipt.id;
+    try {
+      permanentId = await saveReceiptToFirestore(currentUser.uid, { ...newReceipt, fileDataUrl: "" });
 
-            if (driveFileId) {
-              addToast(`Justificatif sauvegardé sur votre Google Drive personnel`, "success");
-            }
+      // If the ID changed (temporary 'rec-' ID -> Firestore auto-ID), update local state without duplicates
+      if (permanentId !== newReceipt.id) {
+        setReceipts((prev) => {
+          if (prev.some((r) => r.id === permanentId)) {
+            return prev.filter((r) => r.id !== newReceipt.id);
           }
-        }
+          return prev.map((r) => (r.id === newReceipt.id ? { ...newReceipt, id: permanentId } : r));
+        });
+      }
+    } catch (err) {
+      console.error("Erreur lors de la synchronisation Firebase:", err);
+      let detail = "";
+      try {
+        const m = (err as Error)?.message || "";
+        detail = (JSON.parse(m).error as string) || m;
+      } catch {
+        detail = (err as Error)?.message || "";
+      }
+      addToast(`Erreur de sauvegarde Cloud : ${detail.slice(0, 160)}`, "error");
+      return;
+    }
 
-        // Save structured data to Cloud Firestore - returns the permanent ID
-        const permanentId = await saveReceiptToFirestore(currentUser.uid, finalReceipt);
-        
-        // If the ID changed (e.g. from a temp 'voice_' ID to a Firestore auto-ID),
-        // update the local state. We must be careful not to create duplicates if the 
-        // real-time listener has already added the item with the permanent ID.
-        if (permanentId !== newReceipt.id) {
-          setReceipts((prev) => {
-            const alreadyHasPermanent = prev.some(r => r.id === permanentId);
-            if (alreadyHasPermanent) {
-              // If listener already added it, just remove the temporary one
-              return prev.filter(r => r.id !== newReceipt.id);
-            }
-            // Otherwise, update the temporary one to the permanent one
-            return prev.map((r) => (r.id === newReceipt.id ? { ...finalReceipt, id: permanentId } : r));
-          });
+    // 3. Upload du justificatif (avec délais maximum), puis mise à jour du document
+    if (newReceipt.fileDataUrl && newReceipt.fileDataUrl.startsWith("data:")) {
+      try {
+        const { url, driveFileId, driveViewLink } = await uploadReceiptToStorage(
+          newReceipt.fileDataUrl,
+          newReceipt.fileName,
+          currentUser.uid,
+          permanentId
+        );
+
+        if (url && !url.startsWith("data:")) {
+          const withFile = {
+            ...newReceipt,
+            id: permanentId,
+            fileDataUrl: url,
+            driveFileId: driveFileId || newReceipt.driveFileId,
+            driveViewLink: driveViewLink || newReceipt.driveViewLink,
+          };
+          await saveReceiptToFirestore(currentUser.uid, withFile);
+          setReceipts((prev) =>
+            prev.map((r) => (r.id === permanentId ? { ...r, ...withFile } : r))
+          );
+          if (driveFileId) {
+            addToast("Justificatif sauvegardé sur votre Google Drive personnel", "success");
+          }
+        } else {
+          addToast(
+            "Reçu enregistré, mais le justificatif n'a pas pu être envoyé (Drive/Storage indisponible).",
+            "error"
+          );
         }
       } catch (err) {
-        console.error("Erreur lors de la synchronisation Firebase:", err);
-        let detail = "";
-        try {
-          const m = (err as Error)?.message || "";
-          detail = (JSON.parse(m).error as string) || m;
-        } catch {
-          detail = (err as Error)?.message || "";
-        }
-        addToast(`Erreur de sauvegarde Cloud : ${detail.slice(0, 160)}`, "error");
+        console.error("Erreur upload justificatif:", err);
+        addToast("Reçu enregistré, mais l'envoi du justificatif a échoué.", "error");
       }
     }
   };
