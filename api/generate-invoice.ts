@@ -27,7 +27,7 @@ export default async function handler(req: any, res: any) {
     Utilise le numéro de facture suivant: FAC-${new Date().getFullYear()}-${String(nextNumber || 1).padStart(3, '0')}`;
 
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt }

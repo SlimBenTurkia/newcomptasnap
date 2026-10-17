@@ -399,7 +399,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
           // Re-use the same analysis logic (Groq)
           console.log("[TELEGRAM_WEBHOOK] Analyzing transcript with Groq...");
           const analysisResponse = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: "openai/gpt-oss-120b",
             messages: [
               { role: "system", content: extractionPrompt },
               { role: "user", content: `Transcription vocale à analyser : ${transcriptText}` }
@@ -430,7 +430,7 @@ RÈGLES CRITIQUES D'EXTRACTION STRICTE ET DE CLASSIFICATION :
         if (!(text.length >= 6 && text.length <= 12 && /^[A-Z0-9]+$/.test(text))) {
           console.log("[TELEGRAM_WEBHOOK] Using Groq for Text extraction (Unified)...");
           const response = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: "openai/gpt-oss-120b",
             messages: [
               { role: "system", content: extractionPrompt },
               { role: "user", content: `Texte à analyser : ${text}` }
