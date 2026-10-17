@@ -275,9 +275,9 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         const result = await response.json();
         if (result.success && result.data) {
           const data = result.data;
-          setSupplier(data.supplier || "Fournisseur non renseigné");
-          setDate(data.date || new Date().toISOString().split("T")[0]);
-          const cur = data.currency || "EUR";
+          setSupplier(String(data.supplier ?? "").trim() || "Fournisseur non renseigné");
+          setDate(String(data.date ?? "").trim() || new Date().toISOString().split("T")[0]);
+          const cur = String(data.currency ?? "").trim().toUpperCase() || "EUR";
           setCurrency(cur);
           const parsedTTC = Number(data.totalTTC) || 0;
           setTotalTTC(parsedTTC);
@@ -291,16 +291,16 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           setVatAmount(Number(data.vatAmount) || (parsedTTC > 0 ? Number((parsedTTC - parsedTTC / (1 + parsedVatRate / 100)).toFixed(2)) : 0));
           const classifiedCategory = (data.category as ReceiptCategory) || "Matériel";
           setCategory(classifiedCategory);
-          const fallbackClass = inferExpenseTypeFallback(data.supplier || "", classifiedCategory);
-          setExpenseType(data.expenseType || fallbackClass.expenseType);
-          setAccountingCode(data.accountingCode || fallbackClass.accountingCode);
+          const fallbackClass = inferExpenseTypeFallback(String(data.supplier ?? ""), classifiedCategory);
+          setExpenseType(String(data.expenseType ?? "").trim() || fallbackClass.expenseType);
+          setAccountingCode(String(data.accountingCode ?? "").trim() || fallbackClass.accountingCode);
           setTaxDeductibility((data.taxDeductibility as TaxDeductibility) || fallbackClass.taxDeductibility);
-          setInvoiceNumber(data.invoiceNumber || "");
+          setInvoiceNumber(String(data.invoiceNumber ?? "").trim());
           setPaymentMethod((data.paymentMethod as PaymentMethod) || "Carte Bancaire");
           setConfidence(data.confidence || 96);
           setExtractedByAI(true);
-          setExtractedLines(data.extractedLines || []);
-          setRawOcrText(data.rawOcrText || "");
+          setExtractedLines(Array.isArray(data.extractedLines) ? data.extractedLines.map((l: any) => String(l)) : []);
+          setRawOcrText(String(data.rawOcrText ?? ""));
           setExtractionError(null);
         } else {
           // If server failed OCR explicitly
@@ -397,55 +397,64 @@ export const ScanModal: React.FC<ScanModalProps> = ({
 
   // Save as Validated or Pending
   const handleSave = (status: "validé" | "en_attente") => {
-    if (!supplier.trim()) {
-      setValidationError("Veuillez renseigner le nom du fournisseur / commerçant");
-      return;
+    try {
+      const txt = (v: unknown) => String(v ?? "").trim();
+
+      if (!txt(supplier)) {
+        setValidationError("Veuillez renseigner le nom du fournisseur / commerçant");
+        return;
+      }
+
+      setValidationError(null);
+
+      const standardized = generateStandardizedFilename(
+        txt(date),
+        txt(supplier),
+        Number(totalTTC) || 0,
+        txt(originalFileName) || "justificatif.pdf"
+      );
+
+      const newReceipt: ReceiptItem = {
+        id: "rec-" + Date.now().toString(36),
+        supplier: txt(supplier),
+        date: txt(date) || new Date().toISOString().split("T")[0],
+        currency,
+        originalTotal: currency === "EUR" ? Number(totalTTC) || 0 : Number(originalTotal) || 0,
+        exchangeRate: currency === "EUR" ? 1.0 : Number(exchangeRate) || 1,
+        totalTTC: Number(totalTTC) || 0,
+        vatAmount: Number(vatAmount) || 0,
+        vatRate,
+        category,
+        expenseType: txt(expenseType) || undefined,
+        accountingCode: txt(accountingCode) || undefined,
+        taxDeductibility,
+        status,
+        paymentMethod,
+        invoiceNumber: txt(invoiceNumber) || undefined,
+        notes: txt(notes) || undefined,
+        fileDataUrl: filePreview || undefined,
+        fileName: originalFileName,
+        fileType,
+        fileSize,
+        standardizedName: standardized,
+        aiExtracted: extractedByAI,
+        confidence,
+        extractedLines: extractedLines.length > 0 ? extractedLines : undefined,
+        rawOcrText: rawOcrText || undefined,
+        extractionSource: extractedByAI ? "groq-ai" : "fallback",
+        source,
+        createdAt: new Date().toISOString(),
+      };
+
+      onSaveReceipt(newReceipt);
+      handleReset();
+      onClose();
+    } catch (err) {
+      console.error("Erreur à l'enregistrement du justificatif:", err);
+      setValidationError(
+        "Enregistrement impossible : " + ((err as Error)?.message || "erreur inattendue") + ". Vérifiez les champs et réessayez."
+      );
     }
-
-    setValidationError(null);
-
-    const standardized = generateStandardizedFilename(
-      date,
-      supplier,
-      totalTTC,
-      originalFileName
-    );
-
-    const newReceipt: ReceiptItem = {
-      id: "rec-" + Date.now().toString(36),
-      supplier: supplier.trim(),
-      date,
-      currency,
-      originalTotal: currency === "EUR" ? Number(totalTTC) : Number(originalTotal),
-      exchangeRate: currency === "EUR" ? 1.0 : Number(exchangeRate),
-      totalTTC: Number(totalTTC) || 0,
-      vatAmount: Number(vatAmount) || 0,
-      vatRate,
-      category,
-      expenseType: expenseType.trim() || undefined,
-      accountingCode: accountingCode.trim() || undefined,
-      taxDeductibility,
-      status,
-      paymentMethod,
-      invoiceNumber: invoiceNumber.trim() || undefined,
-      notes: notes.trim() || undefined,
-      fileDataUrl: filePreview || undefined,
-      fileName: originalFileName,
-      fileType,
-      fileSize,
-      standardizedName: standardized,
-      aiExtracted: extractedByAI,
-      confidence,
-      extractedLines: extractedLines.length > 0 ? extractedLines : undefined,
-      rawOcrText: rawOcrText || undefined,
-      extractionSource: extractedByAI ? "groq-ai" : "fallback",
-      source,
-      createdAt: new Date().toISOString(),
-    };
-
-    onSaveReceipt(newReceipt);
-    handleReset();
-    onClose();
   };
 
   const handleReset = () => {
