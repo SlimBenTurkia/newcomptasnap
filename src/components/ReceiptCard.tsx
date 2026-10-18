@@ -109,7 +109,7 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
         >
           {label}
         </button>
-        {isValidated ? <span className="stamp ok">Validé</span> : <span className="k">à valider</span>}
+        {isValidated ? <span className="stamp ok">Validé</span> : <span className="stamp todo">À valider</span>}
       </div>
 
       <div className="leader">

@@ -146,23 +146,6 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
           ))}
         </div>
 
-        {/* Catégories : mêmes onglets, défilables */}
-        <div className="k flex gap-5 pb-4 overflow-x-auto no-scrollbar" role="tablist" aria-label="Filtrer par catégorie">
-          {["all", ...categories].map((cat) => (
-            <button
-              key={cat}
-              role="tab"
-              aria-selected={selectedCategory === cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`pb-1 border-b-2 min-h-8 whitespace-nowrap cursor-pointer ${
-                selectedCategory === cat ? "text-brand-vibrant border-brand-vibrant" : "text-brand-muted border-transparent"
-              }`}
-            >
-              {cat === "all" ? "Tous les types" : cat}
-            </button>
-          ))}
-        </div>
-
         {filteredReceipts.length > 0 && (
           <div className="k text-brand-muted pb-3">
             {filteredReceipts.length} reçu{filteredReceipts.length > 1 ? "s" : ""} · {formatEuro(filteredTotal)}
