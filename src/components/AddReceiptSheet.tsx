@@ -1,11 +1,13 @@
 import React, { useEffect } from "react";
-import { Camera, Mic, Plus, X } from "lucide-react";
+import { Camera, Mic, Plus, UploadCloud, X } from "lucide-react";
 
 interface AddReceiptSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Photo, import de fichier ou PDF (fenêtre de scan existante) */
+  /** Ouvre directement l'appareil photo */
   onScan: () => void;
+  /** Ouvre le sélecteur de fichiers (image ou PDF) */
+  onImport: () => void;
   /** Enregistrer un reçu à la voix */
   onVoice: () => void;
   /** Saisir un reçu à la main */
@@ -14,12 +16,13 @@ interface AddReceiptSheetProps {
 
 /**
  * Feuille de choix affichée par le bouton central de la barre du bas :
- * scanner un reçu, le dicter, ou le saisir manuellement.
+ * scanner (photo directe), importer un fichier, dicter, ou saisir à la main.
  */
 export const AddReceiptSheet: React.FC<AddReceiptSheetProps> = ({
   isOpen,
   onClose,
   onScan,
+  onImport,
   onVoice,
   onManual,
 }) => {
@@ -34,9 +37,11 @@ export const AddReceiptSheet: React.FC<AddReceiptSheetProps> = ({
 
   if (!isOpen) return null;
 
+  // L'action est appelée dans le même clic que la fermeture : indispensable pour que
+  // le navigateur autorise l'ouverture de l'appareil photo / du sélecteur de fichiers.
   const choose = (action: () => void) => () => {
-    onClose();
     action();
+    onClose();
   };
 
   return (
@@ -64,6 +69,10 @@ export const AddReceiptSheet: React.FC<AddReceiptSheetProps> = ({
         <button type="button" onClick={choose(onScan)} className="btn w-full">
           <Camera className="w-5 h-5" aria-hidden="true" />
           Scanner un reçu
+        </button>
+        <button type="button" onClick={choose(onImport)} className="btn ghost w-full">
+          <UploadCloud className="w-5 h-5" aria-hidden="true" />
+          Importer un fichier
         </button>
         <button type="button" onClick={choose(onVoice)} className="btn ghost w-full">
           <Mic className="w-5 h-5" aria-hidden="true" />
