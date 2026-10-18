@@ -211,7 +211,13 @@ export async function connectGoogleDrive(): Promise<boolean> {
   const result = hasGoogle
     ? await reauthenticateWithPopup(user, provider)
     : await linkWithPopup(user, provider);
-  return storeGoogleDriveCredential(result);
+  const ok = await storeGoogleDriveCredential(result);
+  if (!ok) return false;
+
+  // Crée tout de suite le dossier : il apparaît dans Mon Drive, et toute erreur Google est remontée ici
+  const token = getGoogleDriveToken();
+  if (token) await ensureDriveFolder(token);
+  return true;
 }
 
 /**
@@ -287,6 +293,7 @@ export function clearGoogleDriveSession(): void {
   sessionStorage.removeItem("google_drive_access_token");
   sessionStorage.removeItem("google_drive_token_time");
   sessionStorage.removeItem("google_drive_folder_id");
+  sessionStorage.removeItem("google_drive_folder_cache");
 }
 
 /**
@@ -298,56 +305,94 @@ export async function signOutUser(): Promise<void> {
 }
 
 const DRIVE_FOLDER_NAME = "ComptaSnap Justificatifs";
+const DRIVE_FOLDER_CACHE_KEY = "google_drive_folder_cache";
+const MONTHS_FR = [
+  "01 - Janvier", "02 - Février", "03 - Mars", "04 - Avril", "05 - Mai", "06 - Juin",
+  "07 - Juillet", "08 - Août", "09 - Septembre", "10 - Octobre", "11 - Novembre", "12 - Décembre",
+];
 
-/** Trouve (ou crée) le dossier « ComptaSnap Justificatifs » dans Mon Drive */
-async function ensureDriveFolder(token: string): Promise<string> {
-  const cached = sessionStorage.getItem("google_drive_folder_id");
-  if (cached) return cached;
+/** Construit une erreur lisible à partir de la réponse d'erreur de l'API Google Drive */
+async function driveError(res: Response, prefix: string): Promise<Error> {
+  let detail = "";
+  try {
+    const body = await res.json();
+    detail = body?.error?.message || "";
+  } catch {
+    // corps non JSON
+  }
+  if (res.status === 401 || res.status === 403) clearGoogleDriveSession();
+  return new Error(`${prefix} (${res.status})${detail ? " : " + detail : ""}`);
+}
 
+const readFolderCache = (): Record<string, string> => {
+  try {
+    return JSON.parse(sessionStorage.getItem(DRIVE_FOLDER_CACHE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+};
+
+/** Trouve (ou crée) un dossier nommé `name` dans `parentId` (ou à la racine de Mon Drive) */
+async function findOrCreateDriveFolder(token: string, name: string, parentId?: string): Promise<string> {
   const auth = { Authorization: `Bearer ${token}` };
+  const safeName = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const q = encodeURIComponent(
-    `name = '${DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+    `name = '${safeName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false` +
+      (parentId ? ` and '${parentId}' in parents` : "")
   );
   const listRes = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&spaces=drive`,
     { headers: auth }
   );
-  if (!listRes.ok) {
-    if (listRes.status === 401 || listRes.status === 403) clearGoogleDriveSession();
-    throw new Error(`Google Drive a refusé l'accès (${listRes.status})`);
-  }
-  const list = await listRes.json();
-  let folderId: string | undefined = list.files?.[0]?.id;
+  if (!listRes.ok) throw await driveError(listRes, "Google Drive a refusé l'accès");
+  const found: string | undefined = (await listRes.json()).files?.[0]?.id;
+  if (found) return found;
 
-  if (!folderId) {
-    const createRes = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
-      method: "POST",
-      headers: { ...auth, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: DRIVE_FOLDER_NAME,
-        mimeType: "application/vnd.google-apps.folder",
-        description: "Justificatifs enregistrés via l'application ComptaSnap.",
-      }),
-    });
-    if (!createRes.ok) {
-      if (createRes.status === 401 || createRes.status === 403) clearGoogleDriveSession();
-      throw new Error(`Création du dossier Drive impossible (${createRes.status})`);
+  const createRes = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      mimeType: "application/vnd.google-apps.folder",
+      ...(parentId ? { parents: [parentId] } : {}),
+    }),
+  });
+  if (!createRes.ok) throw await driveError(createRes, "Création du dossier Drive impossible");
+  return (await createRes.json()).id as string;
+}
+
+/** Crée/retrouve toute une arborescence de dossiers, ex. ["ComptaSnap Justificatifs", "2026", "10 - Octobre"] */
+async function ensureDriveFolderPath(token: string, segments: string[]): Promise<string> {
+  const cache = readFolderCache();
+  let parentId: string | undefined;
+  let path = "";
+  for (const seg of segments) {
+    path += "/" + seg;
+    if (cache[path]) {
+      parentId = cache[path];
+      continue;
     }
-    folderId = (await createRes.json()).id;
+    parentId = await findOrCreateDriveFolder(token, seg, parentId);
+    cache[path] = parentId;
+    sessionStorage.setItem(DRIVE_FOLDER_CACHE_KEY, JSON.stringify(cache));
   }
+  return parentId!;
+}
 
-  sessionStorage.setItem("google_drive_folder_id", folderId!);
-  return folderId!;
+/** Dossier racine « ComptaSnap Justificatifs » */
+async function ensureDriveFolder(token: string): Promise<string> {
+  return ensureDriveFolderPath(token, [DRIVE_FOLDER_NAME]);
 }
 
 /**
- * Envoie le justificatif DIRECTEMENT du navigateur vers le Drive de l'utilisateur
- * (dossier « ComptaSnap Justificatifs »), sans passer par Vercel : pas de limite de 4,5 Mo.
+ * Envoie le justificatif DIRECTEMENT du navigateur vers le Drive de l'utilisateur,
+ * rangé par date du reçu : « ComptaSnap Justificatifs / 2026 / 10 - Octobre ».
  */
 export async function uploadReceiptToGoogleDrive(
   fileOrDataUrl: File | Blob | string,
   fileName: string,
-  _mimeType?: string
+  _mimeType?: string,
+  receiptDate?: string
 ): Promise<{ fileId: string; viewLink: string }> {
   const token = getGoogleDriveToken();
   if (!token) {
@@ -356,6 +401,12 @@ export async function uploadReceiptToGoogleDrive(
 
   const blob: Blob =
     typeof fileOrDataUrl === "string" ? await (await fetch(fileOrDataUrl)).blob() : fileOrDataUrl;
+
+  // Dossier année / mois d'après la DATE DU REÇU (et non la date d'envoi)
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(receiptDate || "") ? (receiptDate as string) : new Date().toISOString().slice(0, 10);
+  const year = iso.slice(0, 4);
+  const monthLabel = MONTHS_FR[Math.min(11, Math.max(0, Number(iso.slice(5, 7)) - 1))];
+  const segments = [DRIVE_FOLDER_NAME, year, monthLabel];
 
   const upload = async (folderId: string) => {
     const form = new FormData();
@@ -370,22 +421,40 @@ export async function uploadReceiptToGoogleDrive(
     );
   };
 
-  let folderId = await ensureDriveFolder(token);
+  let folderId = await ensureDriveFolderPath(token, segments);
   let res = await upload(folderId);
 
-  // Dossier supprimé depuis la dernière fois : on le recrée une fois
+  // Dossier supprimé depuis la dernière fois : on vide le cache et on le recrée une fois
   if (res.status === 404) {
-    sessionStorage.removeItem("google_drive_folder_id");
-    folderId = await ensureDriveFolder(token);
+    sessionStorage.removeItem(DRIVE_FOLDER_CACHE_KEY);
+    folderId = await ensureDriveFolderPath(token, segments);
     res = await upload(folderId);
   }
 
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) clearGoogleDriveSession();
-    throw new Error(`Envoi vers Google Drive refusé (${res.status})`);
-  }
+  if (!res.ok) throw await driveError(res, "Envoi vers Google Drive refusé");
   const data = await res.json();
   return { fileId: data.id, viewLink: data.webViewLink };
+}
+
+/**
+ * Télécharge un justificatif depuis Drive (avec le jeton de l'utilisateur) pour l'afficher en aperçu.
+ * Retourne une URL d'objet (image) ou null si l'aperçu est impossible.
+ */
+export async function fetchDriveImageObjectUrl(fileId: string): Promise<string | null> {
+  const token = getGoogleDriveToken();
+  if (!token || !fileId) return null;
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) return null;
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -396,7 +465,8 @@ export async function uploadReceiptToStorage(
   fileOrDataUrl: File | Blob | string,
   fileName: string,
   userId: string,
-  receiptId: string
+  receiptId: string,
+  receiptDate?: string
 ): Promise<{ url: string; storagePath: string; driveFileId?: string; driveViewLink?: string }> {
   const token = getGoogleDriveToken();
   
@@ -404,7 +474,7 @@ export async function uploadReceiptToStorage(
     try {
       const mimeType = typeof fileOrDataUrl !== "string" ? fileOrDataUrl.type : "image/jpeg";
       const driveData = await withTimeout(
-        uploadReceiptToGoogleDrive(fileOrDataUrl, fileName, mimeType),
+        uploadReceiptToGoogleDrive(fileOrDataUrl, fileName, mimeType, receiptDate),
         90000,
         "Google Drive"
       );
