@@ -413,6 +413,11 @@ export default function App() {
     setIsScanOpen(true);
   };
 
+  // « Scanner » ouvre directement l'appareil photo ; « Importer » ouvre le sélecteur de fichiers.
+  // Le fichier choisi part tout de suite à l'analyse IA (sans écran de choix intermédiaire).
+  const openCamera = () => cameraInputRef.current?.click();
+  const openImport = () => fileInputRef.current?.click();
+
   const handleSaveNewReceipt = async (newReceipt: ReceiptItem) => {
     // 1. Optimistic UI update
     setReceipts((prev) => [newReceipt, ...prev]);
@@ -826,10 +831,7 @@ export default function App() {
             previous={previousInfo}
             driveConnected={isGoogleDriveConnected()}
             onConnectDrive={handleConnectDrive}
-            onOpenScan={() => {
-              setPendingFile(null);
-              setIsScanOpen(true);
-            }}
+            onOpenScan={openCamera}
             onOpenPending={() => {
               setStatusFilter("en_attente");
               setActiveTab("receipts");
@@ -883,10 +885,7 @@ export default function App() {
               onDeleteReceipt={handleDeleteReceipt}
               statusFilter={statusFilter}
               onStatusFilterChange={setStatusFilter}
-              onOpenScan={() => {
-                setPendingFile(null);
-                setIsScanOpen(true);
-              }}
+              onOpenScan={openCamera}
               onOpenManual={() => setIsManualOpen(true)}
               onOpenVoice={() => setIsVoiceOpen(true)}
               onImportFile={(file) => {
@@ -952,15 +951,38 @@ export default function App() {
         </div>
       </nav>
 
+      {/* Champs fichier cachés : appareil photo direct / import */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleDirectFile(file, "scan");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleDirectFile(file, "upload");
+          e.target.value = "";
+        }}
+      />
+
       {/* Modals */}
       {/* Choix déclenché par le bouton central : scanner · dicter · saisir */}
       <AddReceiptSheet
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
-        onScan={() => {
-          setPendingFile(null);
-          setIsScanOpen(true);
-        }}
+        onScan={openCamera}
+        onImport={openImport}
         onVoice={() => setIsVoiceOpen(true)}
         onManual={() => setIsManualOpen(true)}
       />
