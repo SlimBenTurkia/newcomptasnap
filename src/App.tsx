@@ -33,6 +33,8 @@ import {
   subscribeToUserProfile,
   saveUserProfile,
   uploadReceiptToStorage,
+  isGoogleDriveConnected,
+  connectGoogleDrive,
   seedInitialReceiptsIfEmpty,
 } from "./lib/firebase";
 import { User } from "firebase/auth";
@@ -70,6 +72,7 @@ export default function App() {
 
   // Invoices state
   const [invoices, setInvoices] = useState<IssuedInvoice[]>([]);
+  const [, refreshDriveStatus] = useState(0);
   const [isInvoiceGenOpen, setIsInvoiceGenOpen] = useState(false);
 
   // Modals state & pending file for direct drag-and-drop or camera capture
@@ -298,7 +301,10 @@ export default function App() {
   // Sync to localStorage as local cache fallback
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(receipts));
+      const light = receipts.map((r) =>
+        r.fileDataUrl && r.fileDataUrl.startsWith("data:") ? { ...r, fileDataUrl: "" } : r
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(light));
     } catch (e) {
       console.warn("Could not save to localStorage", e);
     }
@@ -451,7 +457,7 @@ export default function App() {
       try {
         const { url, driveFileId, driveViewLink } = await uploadReceiptToStorage(
           newReceipt.fileDataUrl,
-          newReceipt.fileName,
+          newReceipt.standardizedName || newReceipt.fileName,
           currentUser.uid,
           permanentId
         );
@@ -473,7 +479,9 @@ export default function App() {
           }
         } else {
           addToast(
-            "Reçu enregistré, mais le justificatif n'a pas pu être envoyé (Drive/Storage indisponible).",
+            isGoogleDriveConnected()
+              ? "Reçu enregistré, mais le justificatif n'a pas pu être envoyé sur Google Drive."
+              : "Reçu enregistré, mais Google Drive n'est pas connecté : justificatif non archivé. Cliquez sur « Connecter Drive » dans l'onglet Reçus.",
             "error"
           );
         }
@@ -747,6 +755,34 @@ export default function App() {
               <div className="k text-brand-vibrant mt-1">
                 {validatedCount}/{displayedReceipts.length} validés · {currentMonthLabel}
               </div>
+            </div>
+            <div className="k flex flex-wrap items-center gap-x-3 gap-y-1 text-brand-muted">
+              {isGoogleDriveConnected() ? (
+                <span>Google Drive connecté · dossier « ComptaSnap Justificatifs »</span>
+              ) : (
+                <>
+                  <span style={{ color: "#C73A10" }}>Google Drive non connecté</span>
+                  <button
+                    type="button"
+                    className="underline cursor-pointer text-brand-vibrant"
+                    onClick={async () => {
+                      try {
+                        const ok = await connectGoogleDrive();
+                        addToast(
+                          ok ? "Google Drive connecté" : "Accès Drive refusé : cochez la case Drive dans la fenêtre Google.",
+                          ok ? "success" : "error"
+                        );
+                      } catch (err: any) {
+                        addToast(`Connexion Drive impossible : ${String(err?.message || err).slice(0, 120)}`, "error");
+                      } finally {
+                        refreshDriveStatus((n) => n + 1);
+                      }
+                    }}
+                  >
+                    Connecter Drive
+                  </button>
+                </>
+              )}
             </div>
             <ReceiptList
               receipts={displayedReceipts}
