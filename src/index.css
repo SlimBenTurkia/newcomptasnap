@@ -192,6 +192,8 @@ button.stamp.ok:active, button.stamp.ok:focus-visible { background: #1E7A4F; col
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .bottom-nav .inner { max-width: 640px; margin: 0 auto; height: 88px; display: flex; justify-content: space-around; align-items: center; padding: 0 8px 14px; }
+/* Chaque côté prend la même largeur : le bouton scanner reste au centre exact */
+.bottom-nav .side { flex: 1; display: flex; justify-content: space-around; align-items: center; }
 .bottom-nav button { font-family: var(--font-mono); background: none; border: 0; color: var(--text-muted); font-size: 12px; min-height: 44px; min-width: 64px; text-transform: uppercase; cursor: pointer; }
 .bottom-nav button.on { color: var(--brand-vibrant); font-weight: 700; }
 .bottom-nav button.add { width: 56px; height: 56px; min-width: 56px; background: #C6F432; display: flex; align-items: center; justify-content: center; }
