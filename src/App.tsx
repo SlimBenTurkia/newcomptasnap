@@ -921,17 +921,20 @@ export default function App() {
         )}
       </main>
 
-      {/* Navigation basse : Accueil · Factures · Scanner · Reçus · Bilan */}
+      {/* Navigation basse : Accueil · Scanner (centré) · Reçus.
+          Le bilan se prépare depuis l'accueil, il n'a plus d'onglet. */}
       <nav className="bottom-nav" aria-label="Navigation principale">
         <div className="inner">
-          <button className={activeTab === "home" ? "on" : ""} aria-current={activeTab === "home" ? "page" : undefined} onClick={() => setActiveTab("home")}>
-            Accueil
-          </button>
-          {SHOW_INVOICES && (
-            <button className={activeTab === "invoices" ? "on" : ""} aria-current={activeTab === "invoices" ? "page" : undefined} onClick={() => setActiveTab("invoices")}>
-              Factures
+          <div className="side">
+            <button className={activeTab === "home" ? "on" : ""} aria-current={activeTab === "home" ? "page" : undefined} onClick={() => setActiveTab("home")}>
+              Accueil
             </button>
-          )}
+            {SHOW_INVOICES && (
+              <button className={activeTab === "invoices" ? "on" : ""} aria-current={activeTab === "invoices" ? "page" : undefined} onClick={() => setActiveTab("invoices")}>
+                Factures
+              </button>
+            )}
+          </div>
           <button
             className="add"
             aria-label="Scanner un reçu"
@@ -942,10 +945,11 @@ export default function App() {
           >
             <b />
           </button>
-          <button className={activeTab === "receipts" ? "on" : ""} aria-current={activeTab === "receipts" ? "page" : undefined} onClick={() => setActiveTab("receipts")}>
-            Reçus
-          </button>
-          <button onClick={() => setIsClosingOpen(true)}>Bilan</button>
+          <div className="side">
+            <button className={activeTab === "receipts" ? "on" : ""} aria-current={activeTab === "receipts" ? "page" : undefined} onClick={() => setActiveTab("receipts")}>
+              Reçus
+            </button>
+          </div>
         </div>
       </nav>
 
