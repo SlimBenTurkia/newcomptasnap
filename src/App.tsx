@@ -5,7 +5,6 @@ import { Header } from "./components/Header";
 import { MonthStats } from "./components/MonthStats";
 import { TreasuryDashboard } from "./components/TreasuryDashboard";
 import { ReceiptList } from "./components/ReceiptList";
-import { ReceiptsSummary } from "./components/ReceiptsSummary";
 import { HomeDashboard } from "./components/HomeDashboard";
 import { shiftMonthKey } from "./utils/receiptStats";
 import { InvoiceList } from "./components/InvoiceList";
@@ -861,8 +860,6 @@ export default function App() {
               </div>
             </div>
 
-            <ReceiptsSummary receipts={displayedReceipts} />
-
             <ReceiptList
               topNotice={
                 isGoogleDriveConnected() ? undefined : (
@@ -885,13 +882,6 @@ export default function App() {
               onDeleteReceipt={handleDeleteReceipt}
               statusFilter={statusFilter}
               onStatusFilterChange={setStatusFilter}
-              onOpenScan={openCamera}
-              onOpenManual={() => setIsManualOpen(true)}
-              onOpenVoice={() => setIsVoiceOpen(true)}
-              onImportFile={(file) => {
-                setPendingFile({ file, source: "upload" });
-                setIsScanOpen(true);
-              }}
               totalAllMonthsCount={receipts.length}
               onShowAllMonths={() => setCurrentPeriod({ type: "all" })}
             />
