@@ -191,19 +191,20 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
             )}
           </div>
         ) : (
-          <div className="ticket !pb-2">
-            {filteredReceipts.map((receipt, i) => (
-              <ReceiptCard
-                key={receipt.id}
-                receipt={receipt}
-                isLast={i === filteredReceipts.length - 1}
-                onClick={() => onSelectReceipt(receipt)}
-                onToggleStatus={(e) => {
-                  e.stopPropagation();
-                  onToggleStatus(receipt.id, e);
-                }}
-                onDelete={onDeleteReceipt ? () => onDeleteReceipt(receipt.id) : undefined}
-              />
+          <div className="space-y-4">
+            {filteredReceipts.map((receipt) => (
+              <div key={receipt.id} className="ticket !pb-2">
+                <ReceiptCard
+                  receipt={receipt}
+                  isLast
+                  onClick={() => onSelectReceipt(receipt)}
+                  onToggleStatus={(e) => {
+                    e.stopPropagation();
+                    onToggleStatus(receipt.id, e);
+                  }}
+                  onDelete={onDeleteReceipt ? () => onDeleteReceipt(receipt.id) : undefined}
+                />
+              </div>
             ))}
           </div>
         )}
