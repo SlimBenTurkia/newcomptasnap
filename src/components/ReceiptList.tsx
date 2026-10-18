@@ -191,7 +191,7 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
             )}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             {filteredReceipts.map((receipt) => (
               <div key={receipt.id} className="ticket !pb-2">
                 <ReceiptCard
