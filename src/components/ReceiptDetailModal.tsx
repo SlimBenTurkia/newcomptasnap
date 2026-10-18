@@ -43,13 +43,23 @@ import {
   Camera,
   UploadCloud,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
+import { connectGoogleDrive, isGoogleDriveConnected } from "../lib/firebase";
 
 interface ReceiptDetailModalProps {
   receipt: ReceiptItem | null;
   onClose: () => void;
   onUpdateReceipt: (updated: ReceiptItem) => void;
   onDeleteReceipt: (id: string) => void;
+  /**
+   * Enregistre un justificatif ajouté après coup (même logique que l'upload initial :
+   * Google Drive, dossier par date, nom standardisé). Retourne true si l'envoi a réussi.
+   */
+  onAttachFile?: (
+    receipt: ReceiptItem,
+    file: { dataUrl: string; fileName: string; fileSize: string; fileType: "image" | "pdf" }
+  ) => Promise<boolean>;
 }
 
 export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
@@ -57,6 +67,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   onClose,
   onUpdateReceipt,
   onDeleteReceipt,
+  onAttachFile,
 }) => {
   if (!receipt) return null;
 
@@ -88,6 +99,16 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   const [notes, setNotes] = useState(receipt.notes || "");
   const [status, setStatus] = useState<"validé" | "en_attente">(receipt.status);
   const [localFileDataUrl, setLocalFileDataUrl] = useState(receipt.fileDataUrl);
+  // Justificatif choisi mais pas encore enregistré (en attente du clic sur « Enregistrer »)
+  const [pendingFile, setPendingFile] = useState<{
+    dataUrl: string;
+    fileName: string;
+    fileSize: string;
+    fileType: "image" | "pdf";
+  } | null>(null);
+  const [isAttaching, setIsAttaching] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [, refreshDriveState] = useState(0);
   const preview = useReceiptPreview(localFileDataUrl, receipt.driveFileId, receipt.driveViewLink, receipt.fileType);
   const [imgBroken, setImgBroken] = useState(false);
   useEffect(() => setImgBroken(false), [preview.src]);
@@ -126,21 +147,43 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string;
-        setLocalFileDataUrl(dataUrl);
-        // Automatically save/update the receipt with the new image
-        const updated: ReceiptItem = {
-          ...receipt,
-          fileDataUrl: dataUrl,
-          fileName: file.name,
-          fileSize: `${(file.size / 1024).toFixed(1)} KB`,
-        };
-        onUpdateReceipt(updated);
-      };
-      reader.readAsDataURL(file);
+    e.target.value = ""; // permet de re-choisir le même fichier
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setAttachError(null);
+      setPendingFile({
+        dataUrl: event.target?.result as string,
+        fileName: file.name,
+        fileSize: `${Math.max(1, Math.round(file.size / 1024))} Ko`,
+        fileType: file.type === "application/pdf" || /\.pdf$/i.test(file.name) ? "pdf" : "image",
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSavePendingFile = async () => {
+    if (!pendingFile || !onAttachFile || isAttaching) return;
+    setIsAttaching(true);
+    setAttachError(null);
+    try {
+      const ok = await onAttachFile(receipt, pendingFile);
+      if (ok) setPendingFile(null);
+      else setAttachError("L'envoi a échoué. Vérifiez la connexion à Google Drive puis réessayez.");
+    } finally {
+      setIsAttaching(false);
+    }
+  };
+
+  const handleConnectDriveHere = async () => {
+    setAttachError(null);
+    try {
+      const ok = await connectGoogleDrive();
+      if (!ok) setAttachError("Accès Drive refusé : cochez la case Drive dans la fenêtre Google.");
+    } catch (err: any) {
+      setAttachError(`Connexion Drive impossible : ${String(err?.message || err).slice(0, 120)}`);
+    } finally {
+      refreshDriveState((n) => n + 1);
     }
   };
 
@@ -318,7 +361,7 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
     document.body.removeChild(a);
   };
 
-  const hasImage = Boolean(receipt.fileDataUrl);
+  const hasImage = Boolean(receipt.fileDataUrl || pendingFile);
   const currentCategoryMeta = getCategoryMetadata(category);
   const viewCategoryMeta = getCategoryMetadata(receipt.category);
   const deductBadge = getTaxDeductibilityBadge(receipt.taxDeductibility);
@@ -507,7 +550,65 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
                 </div>
 
                 {/* Interactive Big Preview Stage or Upload Area */}
-                {hasDocument && !canShowImage ? (
+                {pendingFile ? (
+                  <div className="flex-1 min-h-[340px] md:min-h-[460px] rounded-xl bg-neutral-950 border border-emerald-500/40 overflow-hidden flex flex-col">
+                    <div className="flex-1 flex items-center justify-center p-3 min-h-[220px]">
+                      {pendingFile.fileType === "image" ? (
+                        <img
+                          src={pendingFile.dataUrl}
+                          alt="Justificatif à enregistrer"
+                          className="max-h-[360px] w-auto max-w-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 text-center">
+                          <FileText className="w-10 h-10 text-neutral-500" aria-hidden="true" />
+                          <p className="text-sm text-neutral-200 break-all px-4">{pendingFile.fileName}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t border-neutral-800 p-3 space-y-2">
+                      <p className="text-[11px] text-neutral-400 break-all">
+                        {pendingFile.fileName} • {pendingFile.fileSize} — pas encore enregistré
+                      </p>
+                      {attachError && <p className="text-[11px] text-red-400">{attachError}</p>}
+                      {!isGoogleDriveConnected() && (
+                        <button
+                          type="button"
+                          onClick={handleConnectDriveHere}
+                          className="w-full px-3 py-2 rounded-xl border border-neutral-700 text-neutral-200 text-xs font-bold hover:bg-neutral-800 transition-colors cursor-pointer"
+                        >
+                          Connecter Google Drive
+                        </button>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingFile(null);
+                            setAttachError(null);
+                          }}
+                          disabled={isAttaching}
+                          className="px-4 py-2.5 rounded-xl border border-neutral-700 text-neutral-300 text-xs font-bold hover:bg-neutral-800 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          Annuler
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSavePendingFile}
+                          disabled={isAttaching}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 text-neutral-950 text-xs font-black uppercase tracking-widest hover:bg-emerald-400 transition-colors disabled:opacity-60 cursor-pointer"
+                        >
+                          {isAttaching ? (
+                            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Save className="w-4 h-4" aria-hidden="true" />
+                          )}
+                          {isAttaching ? "Envoi en cours…" : "Enregistrer le justificatif"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : hasDocument && !canShowImage ? (
                   <PreviewUnavailable driveLink={preview.driveLink} loading={preview.status === "loading"} />
                 ) : localFileDataUrl || preview.src ? (
                   <div
