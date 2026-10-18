@@ -6,6 +6,8 @@ import { MonthStats } from "./components/MonthStats";
 import { TreasuryDashboard } from "./components/TreasuryDashboard";
 import { ReceiptList } from "./components/ReceiptList";
 import { ReceiptsSummary } from "./components/ReceiptsSummary";
+import { HomeDashboard } from "./components/HomeDashboard";
+import { shiftMonthKey } from "./utils/receiptStats";
 import { InvoiceList } from "./components/InvoiceList";
 import { GenerateInvoiceModal } from "./components/GenerateInvoiceModal";
 import { ScanModal } from "./components/ScanModal";
@@ -43,6 +45,13 @@ import { Plus } from "lucide-react";
 
 const STORAGE_KEY = "comptasnap_receipts_v1";
 
+/**
+ * Fonction « Factures » (génération + liste de factures clients).
+ * Masquée pour le moment : tout le code reste en place mais n'est ni affiché ni exécuté.
+ * Pour la remettre : passer cette constante à `true`.
+ */
+const SHOW_INVOICES = false;
+
 export default function App() {
   // Firebase User & Connection State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -68,7 +77,7 @@ export default function App() {
   const [currentPeriod, setCurrentPeriod] = useState<PeriodSelection>({
     type: "current_month",
   });
-  const [statusFilter, setStatusFilter] = useState<"all" | "validé" | "en_attente">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "validé" | "en_attente" | "sans_justif">("all");
   const [activeTab, setActiveTab] = useState<"home" | "receipts" | "invoices">("home");
 
   // Invoices state
@@ -208,7 +217,7 @@ export default function App() {
 
   // 2.6 Real-time Invoices Subscription
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !SHOW_INVOICES) return;
 
     const unsubscribeInvoices = subscribeToInvoices(
       currentUser.uid,
@@ -754,6 +763,21 @@ export default function App() {
     );
   }
 
+  // Mois précédent (comparaison sur l'accueil) : seulement pour une période « mois »
+  const previousInfo = (() => {
+    const now = new Date();
+    const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let key: string | null = null;
+    if (currentPeriod.type === "current_month") key = shiftMonthKey(nowKey, -1);
+    else if (currentPeriod.type === "last_month") key = shiftMonthKey(nowKey, -2);
+    else if (currentPeriod.type === "month" && currentPeriod.monthKey) key = shiftMonthKey(currentPeriod.monthKey, -1);
+    if (!key) return null;
+    return {
+      receipts: receipts.filter((r) => (r.date || "").slice(0, 7) === key),
+      label: formatMonthYearLabel(key),
+    };
+  })();
+
   const pendingInvoicesTotal = invoices
     .filter((i) => i.status === "en_attente")
     .reduce((acc, i) => acc + i.totalTTC, 0);
@@ -793,54 +817,35 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 min-w-0 max-w-xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
         {activeTab === "home" && (
-          <>
-            <MonthStats
-              receipts={displayedReceipts}
-              allReceipts={receipts}
-              monthLabel={currentMonthLabel}
-              onValidateAllPending={handleValidateAllPending}
-              onOpenPending={() => {
-                setStatusFilter("en_attente");
-                setActiveTab("receipts");
-              }}
-              onOpenValidated={() => {
-                setStatusFilter("validé");
-                setActiveTab("receipts");
-              }}
-            />
-
-            {pendingInvoicesTotal > 0 && (
-              <button
-                onClick={() => setActiveTab("invoices")}
-                className="w-full text-left border border-brand-snow/15 px-4 py-3 cursor-pointer hover:border-brand-vibrant transition-colors"
-              >
-                <div className="leader text-brand-snow">
-                  <span>Factures en attente</span><i /><span className="text-brand-vibrant">{formatEuro(pendingInvoicesTotal)}</span>
-                </div>
-              </button>
-            )}
-
-            <section aria-label="Dernières lignes">
-              <div className="k text-brand-muted mb-1.5">Dernières lignes</div>
-              {recentReceipts.length === 0 ? (
-                <p className="text-sm text-brand-muted py-3">
-                  Aucune dépense sur cette période. Appuyez sur le bouton + pour scanner votre premier reçu.
-                </p>
-              ) : (
-                recentReceipts.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => setSelectedReceipt(r)}
-                    className="leader w-full text-left cursor-pointer hover:text-brand-vibrant"
-                  >
-                    <span className="truncate">{r.supplier}</span>
-                    <i />
-                    <span>{r.transactionType === "income" ? "+" : "−"}{formatEuro(r.totalTTC).replace(/\s€$/, "")}</span>
-                  </button>
-                ))
-              )}
-            </section>
-          </>
+          <HomeDashboard
+            receipts={displayedReceipts}
+            allReceipts={receipts}
+            monthLabel={currentMonthLabel}
+            previous={previousInfo}
+            driveConnected={isGoogleDriveConnected()}
+            onConnectDrive={handleConnectDrive}
+            onOpenScan={() => {
+              setPendingFile(null);
+              setIsScanOpen(true);
+            }}
+            onOpenPending={() => {
+              setStatusFilter("en_attente");
+              setActiveTab("receipts");
+            }}
+            onOpenMissing={() => {
+              setStatusFilter("sans_justif");
+              setActiveTab("receipts");
+            }}
+            onOpenValidated={() => {
+              setStatusFilter("validé");
+              setActiveTab("receipts");
+            }}
+            onOpenReceipt={(r) => setSelectedReceipt(r)}
+            onValidateAllPending={handleValidateAllPending}
+            onOpenClosing={() => setIsClosingOpen(true)}
+            pendingInvoicesTotal={SHOW_INVOICES ? pendingInvoicesTotal : 0}
+            onOpenInvoices={SHOW_INVOICES ? () => setActiveTab("invoices") : undefined}
+          />
         )}
 
         {activeTab === "receipts" && (
@@ -892,7 +897,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === "invoices" && (
+        {SHOW_INVOICES && activeTab === "invoices" && (
           <div className="space-y-6">
             <div>
               <h1 className="text-[44px] font-extrabold tracking-[-0.03em] leading-none">Factures</h1>
@@ -922,9 +927,11 @@ export default function App() {
           <button className={activeTab === "home" ? "on" : ""} aria-current={activeTab === "home" ? "page" : undefined} onClick={() => setActiveTab("home")}>
             Accueil
           </button>
-          <button className={activeTab === "invoices" ? "on" : ""} aria-current={activeTab === "invoices" ? "page" : undefined} onClick={() => setActiveTab("invoices")}>
-            Factures
-          </button>
+          {SHOW_INVOICES && (
+            <button className={activeTab === "invoices" ? "on" : ""} aria-current={activeTab === "invoices" ? "page" : undefined} onClick={() => setActiveTab("invoices")}>
+              Factures
+            </button>
+          )}
           <button
             className="add"
             aria-label="Scanner un reçu"
@@ -978,12 +985,14 @@ export default function App() {
         }}
       />
 
-      <GenerateInvoiceModal
-        isOpen={isInvoiceGenOpen}
-        onClose={() => setIsInvoiceGenOpen(false)}
-        onSave={handleSaveInvoice}
-        nextInvoiceNumber={userProfile?.nextInvoiceNumber || 1}
-      />
+      {SHOW_INVOICES && (
+        <GenerateInvoiceModal
+          isOpen={isInvoiceGenOpen}
+          onClose={() => setIsInvoiceGenOpen(false)}
+          onSave={handleSaveInvoice}
+          nextInvoiceNumber={userProfile?.nextInvoiceNumber || 1}
+        />
+      )}
 
       {currentUser && (
         <ProfileModal
