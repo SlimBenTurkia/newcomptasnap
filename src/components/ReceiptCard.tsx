@@ -12,6 +12,7 @@ import {
   FileBox,
   HelpCircle,
   Trash2,
+  ExternalLink,
   Hotel,
   Briefcase,
   Megaphone,
@@ -86,6 +87,10 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
   const hasJustificatif = !!(receipt.fileDataUrl || receipt.driveFileId);
   const deductBadge = receipt.taxDeductibility ? getTaxDeductibilityBadge(receipt.taxDeductibility) : null;
   const label = receipt.expenseType || receipt.category;
+  // Lien direct vers le justificatif dans Google Drive (un clic)
+  const driveLink =
+    receipt.driveViewLink ||
+    (receipt.fileDataUrl && receipt.fileDataUrl.includes("drive.google.com") ? receipt.fileDataUrl : undefined);
 
   return (
     <div
@@ -124,6 +129,18 @@ export const ReceiptCard: React.FC<ReceiptCardProps> = ({
           {formatEuro(receipt.totalTTC)}
         </div>
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {driveLink && (
+            <a
+              href={driveLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 cursor-pointer text-[var(--paper-muted)] hover:text-[var(--ink)]"
+              title="Ouvrir le justificatif sur Google Drive"
+              aria-label={`Ouvrir le justificatif de ${receipt.supplier} sur Google Drive`}
+            >
+              <ExternalLink className="w-5 h-5" />
+            </a>
+          )}
           <button
             type="button"
             onClick={onToggleStatus}

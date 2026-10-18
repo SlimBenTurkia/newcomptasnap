@@ -17,6 +17,7 @@ import {
 } from "../utils/expenseCategories";
 import { getCategoryIcon } from "./ReceiptCard";
 import { ImageViewerModal } from "./ImageViewerModal";
+import { useReceiptPreview, PreviewUnavailable } from "./ReceiptFilePreview";
 import {
   X,
   CheckCircle2,
@@ -41,6 +42,7 @@ import {
   Mail,
   Camera,
   UploadCloud,
+  ExternalLink,
 } from "lucide-react";
 
 interface ReceiptDetailModalProps {
@@ -86,6 +88,11 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
   const [notes, setNotes] = useState(receipt.notes || "");
   const [status, setStatus] = useState<"validé" | "en_attente">(receipt.status);
   const [localFileDataUrl, setLocalFileDataUrl] = useState(receipt.fileDataUrl);
+  const preview = useReceiptPreview(localFileDataUrl, receipt.driveFileId, receipt.driveViewLink, receipt.fileType);
+  const [imgBroken, setImgBroken] = useState(false);
+  useEffect(() => setImgBroken(false), [preview.src]);
+  const canShowImage = preview.status === "ready" && !!preview.src && !imgBroken;
+  const hasDocument = Boolean(localFileDataUrl || preview.driveLink);
   const [showNoImageWarning, setShowNoImageWarning] = useState(false);
 
   // Sync state whenever receipt prop updates or changes (prevents stale status/data bugs)
@@ -302,9 +309,9 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
 
   const handleDownloadImage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!receipt.fileDataUrl) return;
+    if (!preview.src) return;
     const a = document.createElement("a");
-    a.href = receipt.fileDataUrl;
+    a.href = preview.src;
     a.download = receipt.standardizedName || receipt.fileName || "justificatif.jpg";
     document.body.appendChild(a);
     a.click();
@@ -450,47 +457,67 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
                     <span>Justificatif original</span>
                   </span>
 
-                  {/* Image Action Buttons (only if image exists) */}
-                  {localFileDataUrl && (
+                  {/* Actions : Drive toujours disponible, rotation/zoom seulement si l'aperçu s'affiche */}
+                  {hasDocument && (
                     <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={handleRotateImage}
-                        className="p-1.5 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs transition-colors cursor-pointer"
-                        title="Pivoter de 90°"
-                      >
-                        <RotateCw className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleDownloadImage}
-                        className="p-1.5 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs transition-colors cursor-pointer"
-                        title="Télécharger l'original"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsImageViewerOpen(true)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-medium transition-colors cursor-pointer"
-                        title="Ouvrir en plein écran"
-                      >
-                        <Maximize2 className="w-3 h-3" />
-                        <span>Plein écran</span>
-                      </button>
+                      {preview.driveLink && (
+                        <a
+                          href={preview.driveLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-medium transition-colors cursor-pointer"
+                          title="Ouvrir le justificatif sur Google Drive"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Ouvrir sur Drive</span>
+                        </a>
+                      )}
+                      {canShowImage && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleRotateImage}
+                            className="p-1.5 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs transition-colors cursor-pointer"
+                            title="Pivoter de 90°"
+                          >
+                            <RotateCw className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDownloadImage}
+                            className="p-1.5 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs transition-colors cursor-pointer"
+                            title="Télécharger l'original"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsImageViewerOpen(true)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-medium transition-colors cursor-pointer"
+                            title="Ouvrir en plein écran"
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                            <span>Plein écran</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Interactive Big Preview Stage or Upload Area */}
-                {localFileDataUrl ? (
+                {hasDocument && !canShowImage ? (
+                  <PreviewUnavailable driveLink={preview.driveLink} loading={preview.status === "loading"} />
+                ) : localFileDataUrl || preview.src ? (
                   <div
                     onClick={() => setIsImageViewerOpen(true)}
                     className="group relative flex-1 min-h-[340px] md:min-h-[460px] rounded-xl bg-neutral-950 border border-neutral-800 overflow-hidden flex items-center justify-center cursor-zoom-in hover:border-neutral-700 transition-colors"
                   >
                     <img
-                      src={localFileDataUrl}
+                      src={preview.src || localFileDataUrl}
                       alt={receipt.supplier}
+                      onError={() => setImgBroken(true)}
                       style={{
                         transform: `rotate(${localRotation}deg)`,
                         transition: "transform 0.2s ease-out",
@@ -1126,11 +1153,11 @@ export const ReceiptDetailModal: React.FC<ReceiptDetailModalProps> = ({
       </div>
 
       {/* High-Resolution Full-Screen Lightbox Image Viewer */}
-      {receipt.fileDataUrl && (
+      {canShowImage && preview.src && (
         <ImageViewerModal
           isOpen={isImageViewerOpen}
           onClose={() => setIsImageViewerOpen(false)}
-          imageUrl={receipt.fileDataUrl}
+          imageUrl={preview.src}
           title={receipt.supplier}
           subtitle={`${formatDateFrench(receipt.date)} • ${formatEuro(receipt.totalTTC)}`}
           fileName={receipt.standardizedName || receipt.fileName}
