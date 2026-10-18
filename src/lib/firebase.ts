@@ -2,6 +2,9 @@ import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import {
   getAuth,
   signInWithPopup,
+  reauthenticateWithPopup,
+  linkWithPopup,
+  UserCredential,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -149,34 +152,66 @@ export async function signInWithGoogle(): Promise<User> {
 
   const result = await signInWithPopup(auth, provider);
 
-  // Reset any previous Drive state, then store the new token if it really has the Drive scope
-  clearGoogleDriveSession();
-  const credential = GoogleAuthProvider.credentialFromResult(result);
-  if (credential?.accessToken) {
-    let hasDriveScope = true;
-    try {
-      const info = await fetch(
-        `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(credential.accessToken)}`
-      );
-      if (info.ok) {
-        const data = await info.json();
-        hasDriveScope = String(data.scope || "").includes("auth/drive");
-      }
-    } catch {
-      // Vérification impossible (réseau) : on garde le jeton, le serveur tranchera
-    }
-
-    if (hasDriveScope) {
-      sessionStorage.setItem("google_drive_access_token", credential.accessToken);
-      sessionStorage.setItem("google_drive_token_time", String(Date.now()));
-    } else {
-      console.warn(
-        "Accès Google Drive non accordé : lors de la connexion Google, cochez la case Drive. Les justificatifs iront sur Firebase Storage."
-      );
-    }
-  }
+  await storeGoogleDriveCredential(result);
 
   return result.user;
+}
+
+
+/**
+ * Stocke le jeton Google Drive issu d'une connexion/ré-autorisation,
+ * uniquement s'il possède bien la permission Drive.
+ */
+async function storeGoogleDriveCredential(result: UserCredential): Promise<boolean> {
+  clearGoogleDriveSession();
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  if (!credential?.accessToken) return false;
+
+  let hasDriveScope = true;
+  try {
+    const info = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(credential.accessToken)}`
+    );
+    if (info.ok) {
+      const data = await info.json();
+      hasDriveScope = String(data.scope || "").includes("auth/drive");
+    }
+  } catch {
+    // Vérification impossible (réseau) : on garde le jeton, Google tranchera
+  }
+
+  if (!hasDriveScope) {
+    console.warn("Accès Google Drive non accordé : cochez la case Drive dans la fenêtre d'autorisation Google.");
+    return false;
+  }
+  sessionStorage.setItem("google_drive_access_token", credential.accessToken);
+  sessionStorage.setItem("google_drive_token_time", String(Date.now()));
+  return true;
+}
+
+/** True si un jeton Drive valide (moins de 55 min) est disponible */
+export function isGoogleDriveConnected(): boolean {
+  return !!getGoogleDriveToken();
+}
+
+/**
+ * Connecte (ou reconnecte) Google Drive pour l'utilisateur déjà connecté.
+ * Retourne true si l'accès Drive a été accordé.
+ */
+export async function connectGoogleDrive(): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Vous devez d'abord être connecté.");
+  const provider = new GoogleAuthProvider();
+  provider.addScope("https://www.googleapis.com/auth/drive.file");
+  provider.setCustomParameters({
+    prompt: "consent",
+    ...(user.email ? { login_hint: user.email } : {}),
+  });
+  const hasGoogle = user.providerData.some((p) => p.providerId === "google.com");
+  const result = hasGoogle
+    ? await reauthenticateWithPopup(user, provider)
+    : await linkWithPopup(user, provider);
+  return storeGoogleDriveCredential(result);
 }
 
 /**
@@ -262,92 +297,95 @@ export async function signOutUser(): Promise<void> {
   await signOut(auth);
 }
 
+const DRIVE_FOLDER_NAME = "ComptaSnap Justificatifs";
+
+/** Trouve (ou crée) le dossier « ComptaSnap Justificatifs » dans Mon Drive */
+async function ensureDriveFolder(token: string): Promise<string> {
+  const cached = sessionStorage.getItem("google_drive_folder_id");
+  if (cached) return cached;
+
+  const auth = { Authorization: `Bearer ${token}` };
+  const q = encodeURIComponent(
+    `name = '${DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+  );
+  const listRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&spaces=drive`,
+    { headers: auth }
+  );
+  if (!listRes.ok) {
+    if (listRes.status === 401 || listRes.status === 403) clearGoogleDriveSession();
+    throw new Error(`Google Drive a refusé l'accès (${listRes.status})`);
+  }
+  const list = await listRes.json();
+  let folderId: string | undefined = list.files?.[0]?.id;
+
+  if (!folderId) {
+    const createRes = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: DRIVE_FOLDER_NAME,
+        mimeType: "application/vnd.google-apps.folder",
+        description: "Justificatifs enregistrés via l'application ComptaSnap.",
+      }),
+    });
+    if (!createRes.ok) {
+      if (createRes.status === 401 || createRes.status === 403) clearGoogleDriveSession();
+      throw new Error(`Création du dossier Drive impossible (${createRes.status})`);
+    }
+    folderId = (await createRes.json()).id;
+  }
+
+  sessionStorage.setItem("google_drive_folder_id", folderId!);
+  return folderId!;
+}
+
 /**
- * Uploads receipt file to Google Drive (User's personal drive)
+ * Envoie le justificatif DIRECTEMENT du navigateur vers le Drive de l'utilisateur
+ * (dossier « ComptaSnap Justificatifs »), sans passer par Vercel : pas de limite de 4,5 Mo.
  */
 export async function uploadReceiptToGoogleDrive(
   fileOrDataUrl: File | Blob | string,
   fileName: string,
-  mimeType: string
+  _mimeType?: string
 ): Promise<{ fileId: string; viewLink: string }> {
   const token = getGoogleDriveToken();
   if (!token) {
-    throw new Error("Authentification Google Drive manquante. Veuillez vous reconnecter.");
+    throw new Error("Google Drive non connecté. Utilisez « Connecter Drive » dans l'onglet Reçus.");
   }
 
-  let fileBase64 = "";
-  if (typeof fileOrDataUrl === "string") {
-    fileBase64 = fileOrDataUrl;
-  } else {
-    fileBase64 = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(fileOrDataUrl);
-    });
-  }
+  const blob: Blob =
+    typeof fileOrDataUrl === "string" ? await (await fetch(fileOrDataUrl)).blob() : fileOrDataUrl;
 
-  // 1. Ensure folder exists (Dedicated "ComptaSnap Justificatifs")
-  let folderId = sessionStorage.getItem("google_drive_folder_id");
-  if (!folderId) {
-    const targetInitUrl = getApiUrl("/api/drive-init");
-    console.log(`Initialisation Google Drive sur: ${targetInitUrl}`);
-    const initRes = await fetch(targetInitUrl, {
-      method: "POST",
-      mode: "cors",
-      headers: { 
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      }
-    });
-    
-    if (!initRes.ok) {
-      console.error("Drive Init error response:", initRes.status);
-      if (initRes.status === 401 || initRes.status === 403) clearGoogleDriveSession();
-      throw new Error(`Erreur initialisation Drive (${initRes.status})`);
-    }
-
-    const initData = await initRes.json();
-    if (initData.success) {
-      folderId = initData.folderId;
-      sessionStorage.setItem("google_drive_folder_id", folderId!);
-    }
-  }
-
-  // 2. Upload to Drive
-  const targetUploadUrl = getApiUrl("/api/drive-upload");
-  console.log(`Upload vers Google Drive sur: ${targetUploadUrl}`);
-  const uploadRes = await fetch(targetUploadUrl, {
-    method: "POST",
-    mode: "cors",
-    headers: { 
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
-    body: JSON.stringify({
-      fileName,
-      fileBase64,
-      mimeType,
-      folderId
-    })
-  });
-
-  if (!uploadRes.ok) {
-    console.error("Drive Upload error response:", uploadRes.status);
-    if (uploadRes.status === 401 || uploadRes.status === 403) clearGoogleDriveSession();
-    throw new Error(`Erreur upload Drive (${uploadRes.status})`);
-  }
-
-  const uploadData = await uploadRes.json();
-  if (!uploadData.success) {
-    throw new Error(uploadData.error || "Échec de l'upload vers Google Drive");
-  }
-
-  return { 
-    fileId: uploadData.fileId, 
-    viewLink: uploadData.viewLink 
+  const upload = async (folderId: string) => {
+    const form = new FormData();
+    form.append(
+      "metadata",
+      new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: "application/json" })
+    );
+    form.append("file", blob);
+    return fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form }
+    );
   };
+
+  let folderId = await ensureDriveFolder(token);
+  let res = await upload(folderId);
+
+  // Dossier supprimé depuis la dernière fois : on le recrée une fois
+  if (res.status === 404) {
+    sessionStorage.removeItem("google_drive_folder_id");
+    folderId = await ensureDriveFolder(token);
+    res = await upload(folderId);
+  }
+
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) clearGoogleDriveSession();
+    throw new Error(`Envoi vers Google Drive refusé (${res.status})`);
+  }
+  const data = await res.json();
+  return { fileId: data.id, viewLink: data.webViewLink };
 }
 
 /**
@@ -367,7 +405,7 @@ export async function uploadReceiptToStorage(
       const mimeType = typeof fileOrDataUrl !== "string" ? fileOrDataUrl.type : "image/jpeg";
       const driveData = await withTimeout(
         uploadReceiptToGoogleDrive(fileOrDataUrl, fileName, mimeType),
-        30000,
+        90000,
         "Google Drive"
       );
       return { 
