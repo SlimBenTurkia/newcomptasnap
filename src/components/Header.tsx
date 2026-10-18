@@ -44,17 +44,6 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-3xl mx-auto flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 shrink-0">
           <Logo size={32} withName nameClassName="hidden min-[400px]:inline text-lg" />
-          {pendingCount > 0 && (
-            <button
-              onClick={onTogglePendingFilter}
-              aria-pressed={showOnlyPending}
-              title={showOnlyPending ? "Afficher tous les justificatifs" : "Filtrer les justificatifs à traiter"}
-              className="stamp hidden sm:inline-block cursor-pointer"
-              style={{ background: showOnlyPending ? "#C6F432" : "none", color: showOnlyPending ? "#0E0F0C" : "var(--brand-vibrant)", borderColor: showOnlyPending ? "#0E0F0C" : "var(--brand-vibrant)" }}
-            >
-              À traiter ×{pendingCount}
-            </button>
-          )}
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">

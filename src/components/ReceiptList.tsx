@@ -138,7 +138,13 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
               aria-selected={statusFilter === t.id}
               onClick={() => onStatusFilterChange(t.id)}
               className={`pb-1 border-b-2 min-h-8 cursor-pointer ${
-                statusFilter === t.id ? "text-brand-vibrant border-brand-vibrant" : "text-brand-muted border-transparent"
+                statusFilter === t.id
+                  ? t.id === "en_attente"
+                    ? "text-[#FF1F3D] border-[#FF1F3D]"
+                    : "text-brand-vibrant border-brand-vibrant"
+                  : t.id === "en_attente"
+                    ? "text-[#FF1F3D]/70 border-transparent"
+                    : "text-brand-muted border-transparent"
               }`}
             >
               {t.label}

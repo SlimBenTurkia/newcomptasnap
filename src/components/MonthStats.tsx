@@ -7,6 +7,10 @@ interface MonthStatsProps {
   receipts: ReceiptItem[];
   monthLabel: string;
   onValidateAllPending?: () => void;
+  /** Ouvre la liste des reçus à valider */
+  onOpenPending?: () => void;
+  /** Ouvre la liste des reçus validés (affiché quand tout est à jour) */
+  onOpenValidated?: () => void;
   /** Tous les reçus (toutes périodes) : sert au graphique des 8 dernières semaines */
   allReceipts?: ReceiptItem[];
 }
@@ -23,6 +27,8 @@ export const MonthStats: React.FC<MonthStatsProps> = ({
   receipts,
   monthLabel,
   onValidateAllPending,
+  onOpenPending,
+  onOpenValidated,
   allReceipts,
 }) => {
   const expenses = receipts.filter((r) => r.transactionType !== "income");
@@ -98,9 +104,25 @@ export const MonthStats: React.FC<MonthStatsProps> = ({
           ))
         )}
 
-        {pendingCount > 0 && (
-          <span className="stamp absolute right-3.5 top-3.5">À traiter ×{pendingCount}</span>
-        )}
+        {pendingCount > 0 ? (
+          <button
+            type="button"
+            onClick={onOpenPending}
+            className="stamp todo absolute right-3.5 top-3.5"
+            aria-label={`${pendingCount} justificatif${pendingCount > 1 ? "s" : ""} à traiter : voir la liste`}
+          >
+            À traiter ×{pendingCount}
+          </button>
+        ) : count > 0 ? (
+          <button
+            type="button"
+            onClick={onOpenValidated}
+            className="stamp ok absolute right-3.5 top-3.5"
+            aria-label="Tout est bon : voir les reçus validés"
+          >
+            Tout est bon ✓
+          </button>
+        ) : null}
       </div>
 
       {pendingCount > 0 && onValidateAllPending && (

@@ -80,7 +80,7 @@ export const PeriodSelector: React.FC<PeriodSelectorProps> = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute right-0 mt-2 w-64 rounded-2xl bg-neutral-900 border border-neutral-800 shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
+            className="fixed inset-x-4 top-[calc(env(safe-area-inset-top,0px)+4.5rem)] max-h-[calc(100dvh-13rem)] overflow-y-auto overscroll-contain sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-64 sm:max-h-[70vh] rounded-2xl bg-neutral-900 border border-neutral-800 shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-50"
           >
             {!showCustom ? (
               <div className="py-1.5">
