@@ -200,10 +200,9 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       // Optimize image if it's not a PDF
       if (!isPdf) {
         try {
+          // La version optimisée sert UNIQUEMENT à l'OCR ; le justificatif archivé reste l'original
           const optimized = await processImageForOCR(file, 1024, 1024, 0.65);
           base64Data = optimized.dataUrl;
-          setFilePreview(base64Data);
-          setFileSize(`${Math.round(optimized.optimizedSize / 1024)} Ko`);
           setProcessingStatus("Image optimisée pour l'IA (Scan-enhanced)...");
         } catch (err) {
           console.warn("Image optimization failed, using original:", err);
