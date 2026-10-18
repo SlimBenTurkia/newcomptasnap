@@ -156,6 +156,14 @@
 }
 .stamp.ok { background: none; border-color: #1E7A4F; color: #1E7A4F; }
 .stamp.todo { background: none; border-color: #FF1F3D; color: #FF1F3D; text-shadow: 0 0 6px rgba(255, 31, 61, .35); }
+button.stamp { cursor: pointer; transition: background .15s, color .15s, transform .1s; }
+button.stamp:active { transform: rotate(-6deg) scale(.93); }
+button.stamp.todo:active, button.stamp.todo:focus-visible { background: #FF1F3D; color: #fff; text-shadow: none; }
+button.stamp.ok:active, button.stamp.ok:focus-visible { background: #1E7A4F; color: #fff; }
+@media (hover: hover) {
+  button.stamp.todo:hover { background: #FF1F3D; color: #fff; text-shadow: none; }
+  button.stamp.ok:hover { background: #1E7A4F; color: #fff; }
+}
 .stamp.late { background: none; border-color: #C73A10; color: #C73A10; }
 .stamp.wait { background: none; border-color: currentColor; color: var(--paper-muted); }
 

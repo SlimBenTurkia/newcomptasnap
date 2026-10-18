@@ -713,6 +713,14 @@ export default function App() {
               allReceipts={receipts}
               monthLabel={currentMonthLabel}
               onValidateAllPending={handleValidateAllPending}
+              onOpenPending={() => {
+                setStatusFilter("en_attente");
+                setActiveTab("receipts");
+              }}
+              onOpenValidated={() => {
+                setStatusFilter("validé");
+                setActiveTab("receipts");
+              }}
             />
 
             {pendingInvoicesTotal > 0 && (
