@@ -85,6 +85,9 @@
 
 @layer base {
   html { font-family: var(--font-sans); }
+  /* Mobile : jamais de défilement horizontal (sinon la barre du bas et les boutons sortent de l'écran) */
+  html, body, #root { max-width: 100%; overflow-x: clip; }
+  @supports not (overflow-x: clip) { html, body, #root { overflow-x: hidden; } }
   body {
     background-color: var(--brand-deep);
     color: var(--brand-snow);
@@ -122,6 +125,7 @@
 }
 
 /* Libellé mono */
+.ticket { overflow-wrap: anywhere; }
 .k { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 
 /* Ticket de caisse : papier + bord dentelé */
@@ -141,6 +145,7 @@
 
 /* Ligne à points de conduite : libellé ..... valeur */
 .leader { display: flex; align-items: baseline; gap: 6px; font-size: 14px; padding: 7px 0; font-family: var(--font-mono); }
+.leader > span { min-width: 0; }
 .leader > i { flex: 1; border-bottom: 2px dotted currentColor; opacity: .35; transform: translateY(-3px); }
 
 /* Tampon incliné */

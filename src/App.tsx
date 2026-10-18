@@ -676,7 +676,7 @@ export default function App() {
     .slice(0, 3);
 
   return (
-    <div className="min-h-full bg-brand-deep text-brand-snow flex flex-col font-sans pb-32">
+    <div className="min-h-[100dvh] w-full max-w-full bg-brand-deep text-brand-snow flex flex-col font-sans pb-32">
       {/* Top Header */}
       <Header
         selectedPeriod={currentPeriod}
@@ -705,7 +705,7 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
+      <main className="flex-1 min-w-0 max-w-xl w-full mx-auto px-4 sm:px-6 py-6 space-y-8">
         {activeTab === "home" && (
           <>
             <MonthStats
