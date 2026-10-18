@@ -3,7 +3,7 @@ import { ReceiptItem, ReceiptCategory } from "../types";
 import { ReceiptCard } from "./ReceiptCard";
 import { formatEuro } from "../utils/formatters";
 import { hasJustificatif } from "../utils/receiptStats";
-import { Plus, FileSpreadsheet, Mic, Camera, UploadCloud } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
 
 interface ReceiptListProps {
   receipts: ReceiptItem[];
@@ -12,13 +12,9 @@ interface ReceiptListProps {
   onDeleteReceipt?: (id: string) => void;
   statusFilter: "all" | "validé" | "en_attente" | "sans_justif";
   onStatusFilterChange: (status: "all" | "validé" | "en_attente" | "sans_justif") => void;
-  onOpenScan: () => void;
-  onOpenManual?: () => void;
-  onOpenVoice?: () => void;
-  onImportFile?: (file: File) => void;
   totalAllMonthsCount?: number;
   onShowAllMonths?: () => void;
-  /** Encart affiché sous les boutons d'ajout (ex. Google Drive non connecté) */
+  /** Encart affiché au-dessus de la liste (ex. Google Drive non connecté) */
   topNotice?: React.ReactNode;
   /** Ligne affichée sous la liste */
   footer?: React.ReactNode;
@@ -31,10 +27,6 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
   onDeleteReceipt,
   statusFilter,
   onStatusFilterChange,
-  onOpenScan,
-  onOpenManual,
-  onOpenVoice,
-  onImportFile,
   totalAllMonthsCount = 0,
   onShowAllMonths,
   topNotice,
@@ -90,40 +82,6 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
 
   return (
     <div className="w-full space-y-6">
-      {/* Ajout d'un reçu : même bouton principal que « Nouvelle facture » + méthodes alternatives */}
-      <section aria-label="Ajouter un justificatif" className="space-y-2">
-        <button onClick={onOpenScan} className="btn w-full">
-          <Camera className="w-5 h-5" aria-hidden="true" />
-          Scanner un reçu
-        </button>
-        <div className="grid grid-cols-3 gap-2 [&>*]:min-w-0">
-          <button onClick={onOpenVoice} className="btn ghost !h-12 !px-2 !text-[14px]">
-            <Mic className="w-4 h-4" aria-hidden="true" />
-            Dictée
-          </button>
-          <button onClick={onOpenManual} className="btn ghost !h-12 !px-2 !text-[14px]">
-            <Plus className="w-4 h-4" aria-hidden="true" />
-            Saisie
-          </button>
-          <label className="btn ghost !h-12 !px-2 !text-[14px] focus-within:outline focus-within:outline-2 focus-within:outline-brand-vibrant">
-            <input
-              type="file"
-              className="sr-only"
-              accept="image/*,application/pdf"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file && (file.type.startsWith("image/") || file.type === "application/pdf")) {
-                  onImportFile?.(file);
-                }
-                e.target.value = "";
-              }}
-            />
-            <UploadCloud className="w-4 h-4" aria-hidden="true" />
-            Import
-          </label>
-        </div>
-      </section>
-
       {topNotice}
 
       {/* Liste — même design « ticket » que les factures */}
@@ -182,16 +140,12 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
             </h3>
             <p className="text-sm text-brand-muted mt-2 max-w-xs mx-auto">
               {totalAllMonthsCount === 0
-                ? "Scannez votre premier justificatif : il apparaîtra ici avec son statut."
+                ? "Appuyez sur le bouton central pour ajouter votre premier justificatif : il apparaîtra ici avec son statut."
                 : "Changez de filtre ou de période pour voir les autres reçus."}
             </p>
-            {totalAllMonthsCount > 0 && onShowAllMonths ? (
+            {totalAllMonthsCount > 0 && onShowAllMonths && (
               <button onClick={onShowAllMonths} className="k mt-6 underline cursor-pointer text-brand-vibrant">
                 Voir tous les mois
-              </button>
-            ) : (
-              <button onClick={onOpenScan} className="k mt-6 underline cursor-pointer text-brand-vibrant">
-                Scanner un reçu
               </button>
             )}
           </div>
