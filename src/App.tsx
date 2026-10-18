@@ -11,6 +11,7 @@ import { shiftMonthKey } from "./utils/receiptStats";
 import { InvoiceList } from "./components/InvoiceList";
 import { GenerateInvoiceModal } from "./components/GenerateInvoiceModal";
 import { ScanModal } from "./components/ScanModal";
+import { AddReceiptSheet } from "./components/AddReceiptSheet";
 import { ReceiptDetailModal } from "./components/ReceiptDetailModal";
 import { ManualReceiptModal } from "./components/ManualReceiptModal";
 import { VoiceReceiptModal } from "./components/VoiceReceiptModal";
@@ -86,6 +87,7 @@ export default function App() {
   const [isInvoiceGenOpen, setIsInvoiceGenOpen] = useState(false);
 
   // Modals state & pending file for direct drag-and-drop or camera capture
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
@@ -921,7 +923,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Navigation basse : Accueil · Scanner (centré) · Reçus.
+      {/* Navigation basse : Accueil · Ajouter (centré) · Reçus.
           Le bilan se prépare depuis l'accueil, il n'a plus d'onglet. */}
       <nav className="bottom-nav" aria-label="Navigation principale">
         <div className="inner">
@@ -937,11 +939,8 @@ export default function App() {
           </div>
           <button
             className="add"
-            aria-label="Scanner un reçu"
-            onClick={() => {
-              setPendingFile(null);
-              setIsScanOpen(true);
-            }}
+            aria-label="Ajouter un justificatif"
+            onClick={() => setIsAddOpen(true)}
           >
             <b />
           </button>
@@ -954,6 +953,18 @@ export default function App() {
       </nav>
 
       {/* Modals */}
+      {/* Choix déclenché par le bouton central : scanner · dicter · saisir */}
+      <AddReceiptSheet
+        isOpen={isAddOpen}
+        onClose={() => setIsAddOpen(false)}
+        onScan={() => {
+          setPendingFile(null);
+          setIsScanOpen(true);
+        }}
+        onVoice={() => setIsVoiceOpen(true)}
+        onManual={() => setIsManualOpen(true)}
+      />
+
       <ScanModal
         isOpen={isScanOpen}
         initialFile={pendingFile}
