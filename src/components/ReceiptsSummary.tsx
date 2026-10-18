@@ -1,6 +1,7 @@
 import React from "react";
 import { ReceiptItem } from "../types";
 import { formatEuro } from "../utils/formatters";
+import { hasJustificatif, vatRecoverable } from "../utils/receiptStats";
 
 interface ReceiptsSummaryProps {
   receipts: ReceiptItem[];
@@ -13,12 +14,12 @@ interface ReceiptsSummaryProps {
 export const ReceiptsSummary: React.FC<ReceiptsSummaryProps> = ({ receipts }) => {
   const expenses = receipts.filter((r) => r.transactionType !== "income");
   const totalTTC = expenses.reduce((acc, r) => acc + (Number(r.totalTTC) || 0), 0);
-  const totalVAT = expenses.reduce((acc, r) => acc + (Number(r.vatAmount) || 0), 0);
-  const totalHT = totalTTC - totalVAT;
+  const totalVAT = vatRecoverable(expenses);
+  const totalHT = totalTTC - expenses.reduce((acc, r) => acc + (Number(r.vatAmount) || 0), 0);
 
   const count = expenses.length;
   const validated = expenses.filter((r) => r.status === "validé").length;
-  const missingFile = expenses.filter((r) => !r.fileDataUrl && !r.driveFileId).length;
+  const missingFile = expenses.filter((r) => !hasJustificatif(r)).length;
   const progress = count > 0 ? Math.round((validated / count) * 100) : 0;
 
   return (

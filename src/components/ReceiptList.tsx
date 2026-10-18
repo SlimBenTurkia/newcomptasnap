@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { ReceiptItem, ReceiptCategory } from "../types";
 import { ReceiptCard } from "./ReceiptCard";
 import { formatEuro } from "../utils/formatters";
+import { hasJustificatif } from "../utils/receiptStats";
 import { Plus, FileSpreadsheet, Mic, Camera, UploadCloud } from "lucide-react";
 
 interface ReceiptListProps {
@@ -9,8 +10,8 @@ interface ReceiptListProps {
   onSelectReceipt: (receipt: ReceiptItem) => void;
   onToggleStatus: (id: string, e: React.MouseEvent) => void;
   onDeleteReceipt?: (id: string) => void;
-  statusFilter: "all" | "validé" | "en_attente";
-  onStatusFilterChange: (status: "all" | "validé" | "en_attente") => void;
+  statusFilter: "all" | "validé" | "en_attente" | "sans_justif";
+  onStatusFilterChange: (status: "all" | "validé" | "en_attente" | "sans_justif") => void;
   onOpenScan: () => void;
   onOpenManual?: () => void;
   onOpenVoice?: () => void;
@@ -60,7 +61,9 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
     return receipts
       .filter((r) => {
         // Status filter
-        if (statusFilter !== "all" && r.status !== statusFilter) return false;
+        if (statusFilter === "sans_justif") {
+          if (hasJustificatif(r)) return false;
+        } else if (statusFilter !== "all" && r.status !== statusFilter) return false;
         // Category filter
         if (selectedCategory !== "all" && r.category !== selectedCategory) return false;
         // Search query
@@ -126,11 +129,12 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
       {/* Liste — même design « ticket » que les factures */}
       <div>
         {/* Statut : onglets identiques à ceux des factures */}
-        <div className="k flex gap-5 pb-4" role="tablist" aria-label="Filtrer les reçus">
+        <div className="k flex gap-5 pb-4 overflow-x-auto no-scrollbar" role="tablist" aria-label="Filtrer les reçus">
           {([
             { id: "all", label: "Tous" },
             { id: "en_attente", label: "À valider" },
             { id: "validé", label: "Validés" },
+            { id: "sans_justif", label: "Sans justif." },
           ] as const).map((t) => (
             <button
               key={t.id}
@@ -141,11 +145,13 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
                 statusFilter === t.id
                   ? t.id === "en_attente"
                     ? "text-[#FF1F3D] border-[#FF1F3D]"
-                    : "text-brand-vibrant border-brand-vibrant"
+                    : t.id === "sans_justif"
+                      ? "text-[#C73A10] border-[#C73A10]"
+                      : "text-brand-vibrant border-brand-vibrant"
                   : t.id === "en_attente"
                     ? "text-[#FF1F3D]/70 border-transparent"
                     : "text-brand-muted border-transparent"
-              }`}
+              } whitespace-nowrap`}
             >
               {t.label}
             </button>
