@@ -178,7 +178,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   }
 
   return (
-    <section aria-label={`Synthèse ${monthLabel}`} className="space-y-6">
+    <section aria-label={`Synthèse ${monthLabel}`} className="flex flex-col gap-4">
       <div className="flex items-center justify-between k text-brand-muted px-1">
         <span>{monthLabel}</span>
         <span className={ready ? "text-brand-vibrant" : ""}>
