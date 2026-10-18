@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { ReceiptItem, ReceiptCategory, PaymentMethod, TransactionType } from "../types";
+import { ReceiptItem, ReceiptCategory, PaymentMethod, TransactionType, TaxDeductibility } from "../types";
+import { TEST_SCAN_PRESETS } from "../data/mockReceipts";
+import { formatEuro } from "../utils/formatters";
 import { X, Save, Calendar, Tag, CreditCard, AlignLeft, Euro } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -35,6 +37,41 @@ export const ManualReceiptModal: React.FC<ManualReceiptModalProps> = ({
     notes: "",
   });
 
+  // Champs complémentaires issus d'un reçu type (mêmes suggestions que le bouton central « Scanner »)
+  const [presetExtra, setPresetExtra] = useState<{
+    presetId: string;
+    expenseType?: string;
+    accountingCode?: string;
+    taxDeductibility?: TaxDeductibility;
+    invoiceNumber?: string;
+    currency?: string;
+    originalTotal?: number;
+    exchangeRate?: number;
+  } | null>(null);
+
+  const applyPreset = (preset: (typeof TEST_SCAN_PRESETS)[number]) => {
+    const p = preset as any;
+    setFormData((prev) => ({
+      ...prev,
+      transactionType: "expense",
+      supplier: preset.supplier,
+      totalTTC: String(preset.totalTTC),
+      vatRate: String(preset.vatRate),
+      category: preset.category,
+      notes: preset.description,
+    }));
+    setPresetExtra({
+      presetId: preset.id,
+      expenseType: p.expenseType,
+      accountingCode: p.accountingCode,
+      taxDeductibility: p.taxDeductibility,
+      invoiceNumber: p.invoiceNumber,
+      currency: p.currency,
+      originalTotal: p.originalTotal,
+      exchangeRate: p.exchangeRate,
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -54,9 +91,18 @@ export const ManualReceiptModal: React.FC<ManualReceiptModalProps> = ({
       paymentMethod: formData.paymentMethod as PaymentMethod,
       notes: formData.notes,
       status: "en_attente",
-      taxDeductibility: "deductible",
-      expenseType: formData.category,
-      accountingCode: formData.transactionType === "income" ? "706000" : "606400",
+      taxDeductibility: presetExtra?.taxDeductibility || "deductible",
+      expenseType: presetExtra?.expenseType || formData.category,
+      accountingCode:
+        presetExtra?.accountingCode || (formData.transactionType === "income" ? "706000" : "606400"),
+      invoiceNumber: presetExtra?.invoiceNumber || undefined,
+      ...(presetExtra?.currency
+        ? {
+            currency: presetExtra.currency,
+            originalTotal: presetExtra.originalTotal,
+            exchangeRate: presetExtra.exchangeRate,
+          }
+        : {}),
       standardizedName: `Saisie_Manuelle_${formData.supplier}_${formData.date}.pdf`,
       fileName: "Saisie Manuelle",
       fileType: "pdf",
@@ -67,6 +113,7 @@ export const ManualReceiptModal: React.FC<ManualReceiptModalProps> = ({
 
     onSave(newReceipt);
     onClose();
+    setPresetExtra(null);
     // Reset form
     setFormData({
       transactionType: "expense",
@@ -96,7 +143,7 @@ export const ManualReceiptModal: React.FC<ManualReceiptModalProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-3xl shadow-2xl overflow-hidden"
+            className="relative w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-neutral-900 border border-neutral-800 rounded-3xl shadow-2xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800">
@@ -119,6 +166,35 @@ export const ManualReceiptModal: React.FC<ManualReceiptModalProps> = ({
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
+              {/* Reçus types : mêmes suggestions prêtes que le bouton central « Scanner » */}
+              <div className="pb-4 border-b border-neutral-800">
+                <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
+                  <span className="font-medium">Ou remplir en 1 clic avec un reçu type :</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">Prêt à tester</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {TEST_SCAN_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => applyPreset(preset)}
+                      className={`flex flex-col text-left p-2.5 rounded-xl bg-neutral-950/60 border transition-all cursor-pointer group ${
+                        presetExtra?.presetId === preset.id
+                          ? "border-emerald-500/60"
+                          : "border-neutral-800 hover:border-emerald-500/40 hover:bg-neutral-950"
+                      }`}
+                    >
+                      <span className="font-semibold text-xs text-neutral-200 group-hover:text-emerald-300 transition-colors truncate">
+                        {preset.label}
+                      </span>
+                      <span className="text-[11px] text-neutral-500 truncate">
+                        {preset.supplier} • {formatEuro(preset.totalTTC)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Transaction Type Toggle */}
               <div className="flex p-1 bg-neutral-950 border border-neutral-800 rounded-2xl">
                 <button
