@@ -7,7 +7,7 @@ import { hasJustificatif, isExpense, vatRecoverable, findDuplicateGroups } from 
 interface HomeDashboardProps {
   /** Reçus de la période sélectionnée */
   receipts: ReceiptItem[];
-  /** Tous les reçus (graphique des 12 dernières semaines) */
+  /** Tous les reçus (graphique des 4 semaines) */
   allReceipts: ReceiptItem[];
   monthLabel: string;
   /** Mois précédent, pour la comparaison */
@@ -75,22 +75,30 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
     return `${arrow} vs ${previous.label}`;
   }, [previous, total]);
 
-  // Dépenses des 12 dernières semaines (la dernière barre = semaine en cours)
-  const WEEKS_COUNT = 12;
+  // Dépenses par semaine : 4 semaines, la dernière étant la semaine la plus récente qui contient des données
+  const WEEKS_COUNT = 4;
   const weeks = useMemo(() => {
-    const thisWeek = weekStart(new Date());
-    const WEEK = 7 * 24 * 3600 * 1000;
-    const sums = Array.from({ length: WEEKS_COUNT }, () => 0);
+    const byWeek = new Map<number, number>();
     allReceipts.forEach((r) => {
       if (!isExpense(r) || !r.date) return;
-      const t = weekStart(new Date(r.date + "T12:00:00"));
-      const idx = WEEKS_COUNT - 1 - Math.round((thisWeek - t) / WEEK);
-      if (idx >= 0 && idx < WEEKS_COUNT) sums[idx] += Number(r.totalTTC) || 0;
+      const key = weekStart(new Date(r.date + "T12:00:00"));
+      if (Number.isNaN(key)) return;
+      byWeek.set(key, (byWeek.get(key) || 0) + (Number(r.totalTTC) || 0));
     });
-    const max = Math.max(...sums, 1);
-    return sums.map((v) => ({ value: v, pct: v > 0 ? Math.max(10, Math.round((v / max) * 100)) : 0 }));
+    const anchor = byWeek.size > 0 ? Math.max(...Array.from(byWeek.keys())) : weekStart(new Date());
+    const list = Array.from({ length: WEEKS_COUNT }, (_, i) => {
+      const d = new Date(anchor);
+      d.setDate(d.getDate() - 7 * (WEEKS_COUNT - 1 - i));
+      const start = weekStart(d);
+      return { start, value: byWeek.get(start) || 0 };
+    });
+    const max = Math.max(...list.map((w) => w.value), 1);
+    return list.map((w) => ({
+      ...w,
+      label: new Date(w.start).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }),
+      pct: w.value > 0 ? Math.max(10, Math.round((w.value / max) * 100)) : 0,
+    }));
   }, [allReceipts]);
-  const currentWeekTotal = weeks[weeks.length - 1].value;
 
   // Répartition par catégorie (5 premières + « Autres »)
   const categories = useMemo(() => {
@@ -198,36 +206,35 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
         {variation && <div className="k">{variation}</div>}
 
         <div className="mt-4 mb-2">
-          <div className="flex items-baseline justify-between k text-[10px] mb-1">
-            <span>Par semaine</span>
-            <span>Cette semaine : {formatEuro(currentWeekTotal)}</span>
-          </div>
+          <div className="k text-[10px] mb-1">Dépenses par semaine</div>
           <div
-            className="flex items-end gap-1 h-16 border-b-2 border-[var(--ink)]"
+            className="grid grid-cols-4 gap-2"
             role="img"
-            aria-label={`Dépenses des ${WEEKS_COUNT} dernières semaines, ${formatEuro(currentWeekTotal)} cette semaine`}
+            aria-label={`Dépenses des ${WEEKS_COUNT} dernières semaines avec des données`}
           >
             {weeks.map((w, i) => {
-              const isCurrent = i === weeks.length - 1;
+              const isLast = i === weeks.length - 1;
               return (
-                <b
-                  key={i}
-                  title={formatEuro(w.value)}
-                  className="flex-1 block"
-                  style={{
-                    height: w.pct > 0 ? `${w.pct}%` : "3px",
-                    background: isCurrent && w.pct > 0 ? "#C6F432" : "var(--ink)",
-                    outline: isCurrent && w.pct > 0 ? "1.5px solid var(--ink)" : "none",
-                    outlineOffset: -1.5,
-                    opacity: w.pct === 0 ? 0.18 : 1,
-                  }}
-                />
+                <div key={w.start} className="flex flex-col min-w-0">
+                  <div className="h-16 flex items-end border-b-2 border-[var(--ink)]">
+                    <b
+                      className="block w-full"
+                      style={{
+                        height: w.pct > 0 ? `${w.pct}%` : "3px",
+                        background: isLast && w.pct > 0 ? "#C6F432" : "var(--ink)",
+                        outline: isLast && w.pct > 0 ? "1.5px solid var(--ink)" : "none",
+                        outlineOffset: -1.5,
+                        opacity: w.pct === 0 ? 0.18 : 1,
+                      }}
+                    />
+                  </div>
+                  <div className="font-mono text-[11px] font-bold mt-1 text-center truncate">
+                    {w.value > 0 ? formatEuro(w.value) : "—"}
+                  </div>
+                  <div className="k text-[10px] text-center">sem. {w.label}</div>
+                </div>
               );
             })}
-          </div>
-          <div className="flex justify-between k text-[10px] mt-1">
-            <span>il y a {WEEKS_COUNT} sem.</span>
-            <span>aujourd'hui</span>
           </div>
         </div>
 
