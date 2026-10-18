@@ -459,7 +459,8 @@ export default function App() {
           newReceipt.fileDataUrl,
           newReceipt.standardizedName || newReceipt.fileName,
           currentUser.uid,
-          permanentId
+          permanentId,
+          newReceipt.date
         );
 
         if (url && !url.startsWith("data:")) {
