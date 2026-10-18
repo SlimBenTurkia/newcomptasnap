@@ -5,6 +5,7 @@ import { Header } from "./components/Header";
 import { MonthStats } from "./components/MonthStats";
 import { TreasuryDashboard } from "./components/TreasuryDashboard";
 import { ReceiptList } from "./components/ReceiptList";
+import { ReceiptsSummary } from "./components/ReceiptsSummary";
 import { InvoiceList } from "./components/InvoiceList";
 import { GenerateInvoiceModal } from "./components/GenerateInvoiceModal";
 import { ScanModal } from "./components/ScanModal";
@@ -580,6 +581,20 @@ export default function App() {
     }
   };
 
+  const handleConnectDrive = async () => {
+    try {
+      const ok = await connectGoogleDrive();
+      addToast(
+        ok ? "Google Drive connecté" : "Accès Drive refusé : cochez la case Drive dans la fenêtre Google.",
+        ok ? "success" : "error"
+      );
+    } catch (err: any) {
+      addToast(`Connexion Drive impossible : ${String(err?.message || err).slice(0, 120)}`, "error");
+    } finally {
+      refreshDriveStatus((n) => n + 1);
+    }
+  };
+
   const handleDeleteReceipt = async (id: string) => {
     setReceipts((prev) => prev.filter((r) => r.id !== id));
     addToast("Justificatif supprimé du dossier", "info");
@@ -833,38 +848,28 @@ export default function App() {
             <div>
               <h1 className="text-[44px] font-extrabold tracking-[-0.03em] leading-none">Reçus</h1>
               <div className="k text-brand-vibrant mt-1">
-                {validatedCount}/{displayedReceipts.length} validés · {currentMonthLabel}
+                {pendingCount > 0 ? `${pendingCount} à valider` : "Tout est à jour"} · {currentMonthLabel}
               </div>
             </div>
-            <div className="k flex flex-wrap items-center gap-x-3 gap-y-1 text-brand-muted">
-              {isGoogleDriveConnected() ? (
-                <span>Google Drive connecté · dossier « ComptaSnap Justificatifs »</span>
-              ) : (
-                <>
-                  <span style={{ color: "#C73A10" }}>Google Drive non connecté</span>
-                  <button
-                    type="button"
-                    className="underline cursor-pointer text-brand-vibrant"
-                    onClick={async () => {
-                      try {
-                        const ok = await connectGoogleDrive();
-                        addToast(
-                          ok ? "Google Drive connecté" : "Accès Drive refusé : cochez la case Drive dans la fenêtre Google.",
-                          ok ? "success" : "error"
-                        );
-                      } catch (err: any) {
-                        addToast(`Connexion Drive impossible : ${String(err?.message || err).slice(0, 120)}`, "error");
-                      } finally {
-                        refreshDriveStatus((n) => n + 1);
-                      }
-                    }}
-                  >
-                    Connecter Drive
-                  </button>
-                </>
-              )}
-            </div>
+
+            <ReceiptsSummary receipts={displayedReceipts} />
+
             <ReceiptList
+              topNotice={
+                isGoogleDriveConnected() ? undefined : (
+                  <div className="border border-dashed border-brand-snow/20 px-4 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                    <span className="k text-brand-muted">Google Drive non connecté · justificatifs non archivés</span>
+                    <button type="button" onClick={handleConnectDrive} className="k underline cursor-pointer text-brand-vibrant min-h-8">
+                      Connecter Drive
+                    </button>
+                  </div>
+                )
+              }
+              footer={
+                isGoogleDriveConnected() ? (
+                  <div className="k text-brand-muted text-center">Archivés sur Google Drive · ComptaSnap Justificatifs</div>
+                ) : undefined
+              }
               receipts={displayedReceipts}
               onSelectReceipt={(receipt) => setSelectedReceipt(receipt)}
               onToggleStatus={handleToggleStatus}
