@@ -82,7 +82,7 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
   return (
     <div className="w-full space-y-8 sm:space-y-12">
       {/* Optimized Capture Section */}
-      <section aria-label="Ajouter un justificatif" className="grid grid-cols-4 gap-2">
+      <section aria-label="Ajouter un justificatif" className="grid grid-cols-4 gap-2 [&>*]:min-w-0">
         <button onClick={onOpenScan} className="flex flex-col items-center justify-center gap-2 h-20 bg-brand-vibrant text-brand-deep cursor-pointer font-mono text-xs font-bold uppercase tracking-wider">
           <Camera className="w-5 h-5" aria-hidden="true" />
           Photo

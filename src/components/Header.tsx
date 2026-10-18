@@ -41,9 +41,9 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-30 w-full bg-brand-deep border-b border-brand-snow/10 px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
-      <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+      <div className="max-w-3xl mx-auto flex items-center justify-between gap-2">
         <div className="flex items-center gap-3 shrink-0">
-          <Logo size={34} withName nameClassName="text-lg" />
+          <Logo size={32} withName nameClassName="hidden min-[400px]:inline text-lg" />
           {pendingCount > 0 && (
             <button
               onClick={onTogglePendingFilter}
@@ -57,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           <PeriodSelector
             selectedPeriod={selectedPeriod}
             availableMonths={availableMonths}
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onToggleTheme}
-            className="p-2.5 border border-brand-snow/15 text-brand-muted hover:text-brand-snow transition-colors cursor-pointer"
+            className="p-2 sm:p-2.5 shrink-0 border border-brand-snow/15 text-brand-muted hover:text-brand-snow transition-colors cursor-pointer"
             title={theme === "dark" ? "Passer au mode clair" : "Passer au mode sombre"}
             aria-label={theme === "dark" ? "Passer au mode clair" : "Passer au mode sombre"}
           >
@@ -74,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {currentUser ? (
-            <div className="flex items-center gap-2 pl-2 border-l border-brand-snow/10">
+            <div className="flex items-center gap-1.5 sm:gap-2 pl-1.5 sm:pl-2 border-l border-brand-snow/10 shrink-0">
               <button
                 className="w-9 h-9 border border-brand-vibrant/60 overflow-hidden flex items-center justify-center font-mono text-xs font-bold text-brand-vibrant shrink-0 cursor-pointer"
                 onClick={onOpenProfile}
@@ -89,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
               <button
                 onClick={onSignOut}
-                className="p-2.5 border border-brand-snow/15 text-brand-muted hover:text-brand-late hover:border-brand-late transition-colors cursor-pointer"
+                className="p-2 sm:p-2.5 border border-brand-snow/15 text-brand-muted hover:text-brand-late hover:border-brand-late transition-colors cursor-pointer"
                 title="Se déconnecter"
                 aria-label="Se déconnecter"
               >

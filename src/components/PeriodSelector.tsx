@@ -61,16 +61,16 @@ export const PeriodSelector: React.FC<PeriodSelectorProps> = ({
   ];
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative min-w-0" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-500/50 hover:bg-neutral-800 transition-all cursor-pointer group"
+        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 max-w-full rounded-xl bg-neutral-900 border border-neutral-800 hover:border-emerald-500/50 hover:bg-neutral-800 transition-all cursor-pointer group"
       >
-        <Calendar className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
-        <span className="text-[11px] sm:text-xs font-bold text-neutral-100 whitespace-nowrap">
+        <Calendar className="w-3.5 h-3.5 shrink-0 text-emerald-400 group-hover:scale-110 transition-transform" />
+        <span className="text-[11px] sm:text-xs font-bold text-neutral-100 whitespace-nowrap truncate min-w-0">
           {getPeriodLabel(selectedPeriod)}
         </span>
-        <ChevronDown className={`w-3 h-3 text-neutral-500 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-3 h-3 shrink-0 text-neutral-500 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       <AnimatePresence>
