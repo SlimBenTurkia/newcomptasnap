@@ -17,6 +17,10 @@ interface ReceiptListProps {
   onImportFile?: (file: File) => void;
   totalAllMonthsCount?: number;
   onShowAllMonths?: () => void;
+  /** Encart affiché sous les boutons d'ajout (ex. Google Drive non connecté) */
+  topNotice?: React.ReactNode;
+  /** Ligne affichée sous la liste */
+  footer?: React.ReactNode;
 }
 
 export const ReceiptList: React.FC<ReceiptListProps> = ({
@@ -32,6 +36,8 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
   onImportFile,
   totalAllMonthsCount = 0,
   onShowAllMonths,
+  topNotice,
+  footer,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -80,51 +86,45 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
   const filteredTotal = filteredReceipts.reduce((sum, r) => sum + r.totalTTC, 0);
 
   return (
-    <div className="w-full space-y-8 sm:space-y-12">
-      {/* Optimized Capture Section */}
-      <section aria-label="Ajouter un justificatif" className="grid grid-cols-4 gap-2 [&>*]:min-w-0">
-        <button onClick={onOpenScan} className="flex flex-col items-center justify-center gap-2 h-20 bg-brand-vibrant text-brand-deep cursor-pointer font-mono text-xs font-bold uppercase tracking-wider">
+    <div className="w-full space-y-6">
+      {/* Ajout d'un reçu : même bouton principal que « Nouvelle facture » + méthodes alternatives */}
+      <section aria-label="Ajouter un justificatif" className="space-y-2">
+        <button onClick={onOpenScan} className="btn w-full">
           <Camera className="w-5 h-5" aria-hidden="true" />
-          Photo
+          Scanner un reçu
         </button>
-        <button onClick={onOpenVoice} className="flex flex-col items-center justify-center gap-2 h-20 border-2 border-brand-snow/80 text-brand-snow cursor-pointer font-mono text-xs font-bold uppercase tracking-wider">
-          <Mic className="w-5 h-5" aria-hidden="true" />
-          Dictée
-        </button>
-        <button onClick={onOpenManual} className="flex flex-col items-center justify-center gap-2 h-20 border-2 border-brand-snow/80 text-brand-snow cursor-pointer font-mono text-xs font-bold uppercase tracking-wider">
-          <Plus className="w-5 h-5" aria-hidden="true" />
-          Saisie
-        </button>
-        <label className="flex flex-col items-center justify-center gap-2 h-20 border-2 border-brand-snow/80 text-brand-snow cursor-pointer font-mono text-xs font-bold uppercase tracking-wider focus-within:outline focus-within:outline-2 focus-within:outline-brand-vibrant">
-          <input
-            type="file"
-            className="sr-only"
-            accept="image/*,application/pdf"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file && (file.type.startsWith("image/") || file.type === "application/pdf")) {
-                onImportFile?.(file);
-              }
-              e.target.value = "";
-            }}
-          />
-          <UploadCloud className="w-5 h-5" aria-hidden="true" />
-          Import
-        </label>
+        <div className="grid grid-cols-3 gap-2 [&>*]:min-w-0">
+          <button onClick={onOpenVoice} className="btn ghost !h-12 !px-2 !text-[14px]">
+            <Mic className="w-4 h-4" aria-hidden="true" />
+            Dictée
+          </button>
+          <button onClick={onOpenManual} className="btn ghost !h-12 !px-2 !text-[14px]">
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Saisie
+          </button>
+          <label className="btn ghost !h-12 !px-2 !text-[14px] focus-within:outline focus-within:outline-2 focus-within:outline-brand-vibrant">
+            <input
+              type="file"
+              className="sr-only"
+              accept="image/*,application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && (file.type.startsWith("image/") || file.type === "application/pdf")) {
+                  onImportFile?.(file);
+                }
+                e.target.value = "";
+              }}
+            />
+            <UploadCloud className="w-4 h-4" aria-hidden="true" />
+            Import
+          </label>
+        </div>
       </section>
+
+      {topNotice}
 
       {/* Liste — même design « ticket » que les factures */}
       <div>
-        {/* Recherche */}
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Rechercher un reçu..."
-          aria-label="Rechercher un reçu"
-          className="w-full h-12 mb-4 bg-transparent border-0 border-b-2 border-brand-snow/40 rounded-none text-brand-snow placeholder:text-brand-muted font-mono text-base focus:outline-none focus:border-brand-vibrant"
-        />
-
         {/* Statut : onglets identiques à ceux des factures */}
         <div className="k flex gap-5 pb-4" role="tablist" aria-label="Filtrer les reçus">
           {([
@@ -151,6 +151,16 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
             </button>
           ))}
         </div>
+
+        {/* Recherche */}
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Rechercher un reçu..."
+          aria-label="Rechercher un reçu"
+          className="w-full h-12 mb-5 bg-transparent border-0 border-b-2 border-brand-snow/40 rounded-none text-brand-snow placeholder:text-brand-muted font-mono text-base focus:outline-none focus:border-brand-vibrant"
+        />
 
         {filteredReceipts.length > 0 && (
           <div className="k text-brand-muted pb-3">
@@ -198,6 +208,8 @@ export const ReceiptList: React.FC<ReceiptListProps> = ({
           </div>
         )}
       </div>
+
+      {footer}
     </div>
   );
 };
