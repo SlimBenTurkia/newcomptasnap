@@ -16,7 +16,7 @@ import { MonthClosingModal } from "./components/MonthClosingModal";
 import { AuthDomainModal } from "./components/AuthDomainModal";
 import { LandingPage } from "./components/LandingPage";
 import { ToastContainer, ToastMessage } from "./components/Toast";
-import { formatMonthYearLabel, filterReceiptsByPeriod, getPeriodLabel, formatEuro } from "./utils/formatters";
+import { formatMonthYearLabel, filterReceiptsByPeriod, getPeriodLabel, formatEuro, generateStandardizedFilename } from "./utils/formatters";
 import {
   initAuth,
   signInWithGoogle,
@@ -509,6 +509,77 @@ export default function App() {
     }
   };
 
+  /**
+   * Ajoute un justificatif à un reçu existant (même logique que l'upload initial) :
+   * envoi sur Google Drive (dossier année / mois de la date du reçu, nom standardisé),
+   * puis mise à jour du reçu dans Firestore. Retourne true si tout a réussi.
+   */
+  const handleAttachFile = async (
+    receipt: ReceiptItem,
+    file: { dataUrl: string; fileName: string; fileSize: string; fileType: "image" | "pdf" }
+  ): Promise<boolean> => {
+    if (!currentUser) {
+      addToast("Connectez-vous pour enregistrer le justificatif.", "error");
+      return false;
+    }
+
+    const standardizedName = generateStandardizedFilename(
+      receipt.date,
+      receipt.supplier,
+      receipt.totalTTC,
+      file.fileName
+    );
+
+    try {
+      const { url, driveFileId, driveViewLink } = await uploadReceiptToStorage(
+        file.dataUrl,
+        standardizedName,
+        currentUser.uid,
+        receipt.id,
+        receipt.date
+      );
+
+      if (!url || url.startsWith("data:")) {
+        addToast(
+          isGoogleDriveConnected()
+            ? "Le justificatif n'a pas pu être envoyé sur Google Drive."
+            : "Google Drive n'est pas connecté : justificatif non enregistré. Cliquez sur « Connecter Google Drive ».",
+          "error"
+        );
+        return false;
+      }
+
+      let updated: ReceiptItem = {
+        ...receipt,
+        fileDataUrl: url,
+        driveFileId: driveFileId || receipt.driveFileId,
+        driveViewLink: driveViewLink || receipt.driveViewLink,
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        standardizedName,
+      };
+
+      const savedId = await saveReceiptToFirestore(currentUser.uid, updated);
+      if (savedId && savedId !== updated.id) updated = { ...updated, id: savedId };
+
+      setReceipts((prev) => prev.map((r) => (r.id === receipt.id ? updated : r)));
+      setSelectedReceipt((cur) => (cur && cur.id === receipt.id ? updated : cur));
+
+      addToast(
+        driveFileId
+          ? "Justificatif sauvegardé sur votre Google Drive personnel"
+          : "Justificatif enregistré",
+        "success"
+      );
+      return true;
+    } catch (err) {
+      console.error("Erreur ajout justificatif:", err);
+      addToast(`Ajout du justificatif impossible : ${String((err as Error)?.message || err).slice(0, 140)}`, "error");
+      return false;
+    }
+  };
+
   const handleDeleteReceipt = async (id: string) => {
     setReceipts((prev) => prev.filter((r) => r.id !== id));
     addToast("Justificatif supprimé du dossier", "info");
@@ -927,6 +998,7 @@ export default function App() {
           onClose={() => setSelectedReceipt(null)}
           onUpdateReceipt={handleUpdateReceipt}
           onDeleteReceipt={handleDeleteReceipt}
+          onAttachFile={handleAttachFile}
         />
       )}
 
